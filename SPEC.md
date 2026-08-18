@@ -116,10 +116,14 @@ Endpoints (todos com `{root, …}`; caminhos sempre relativos à raiz):
 | `fs/delete` | `{root, path}` | `{deleted:true}` (arquivo ou pasta recursiva; raiz bloqueada) |
 
 Regras:
-- **Confinamento/sandbox**: `path.resolve(root, …)` + verificação de prefixo; caminhos existentes passam por `realpath` do ancestral mais profundo (bloqueia symlink que escape da raiz). Escapar → `bad-request`. Reads re-confirmam o `realpath` do arquivo imediatamente antes do I/O (janela TOCTOU reduzida).
+- **Confinamento/sandbox**: `path.resolve(root, …)` + verificação de prefixo; caminhos existentes passam por `realpath` do ancestral mais profundo (bloqueia symlink que escape da raiz). Escapar → `bad-request`. A rejeição do confinamento roda **fora** do walk de ENOENT (senão o escape seria engolido e a escrita vazaria — bug real encontrado e corrigido no repasse de segurança). Reads re-confirmam o `realpath` do arquivo imediatamente antes do I/O (janela TOCTOU reduzida).
+- **Root canônico no dispatch**: o servidor canonicaliza (`realpath`) o root uma vez por chamada e passa o caminho canônico aos endpoints — workspaces alcançados via symlink funcionam, e os guards `abs === root` (delete da raiz) valem mesmo com root simbólico.
+- **A raiz do workspace é intocável por rename/move/delete** (`.`, `''` → `bad-request`).
+- **Somente arquivos regulares são lidos**: `fs/read`/`fs/readLarge` rejeitam FIFO/socket/device (`isFile()`), evitando que `readFile` trave o handler (DoS).
+- **Listagens não vazam metadados**: symlinks que resolvem para fora da raiz são ocultados do `fs/list` (realpath + confine por entrada).
 - **Root validado no servidor (não confiado ao cliente)**: o `root` enviado pelo cliente precisa ser o cwd canônico de uma sessão viva ou um path do workspace registry — caso contrário `bad-request`/`403`. Isso impede ler/gravar diretórios arbitrários (`/`, `/etc`, `~`) pela API loopback. O canal RPC já é protegido contra CSRF pela plataforma (`isTrustedApiRequest`: Host loopback + Origin/same-site).
 - `root` validado como diretório existente a cada chamada.
-- Códigos de erro apenas do schema RPC compartilhado (`bad-request`, `directory-exists`, `directory-unreadable`, `internal`) — o schema do cliente rejeita códigos desconhecidos.
+- Códigos de erro apenas do schema RPC compartilhado (`bad-request`, `directory-exists`, `directory-unreadable`, `internal`) — o schema do cliente rejeita códigos desconhecidos. Dispatch de endpoints via `hasOwnProperty` (`__proto__`/`constructor` → `bad-request`).
 - Binário detectado por byte NUL nos primeiros 8 KB.
 
 ### 3.2 Rotas web (webServer)
