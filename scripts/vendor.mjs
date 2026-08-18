@@ -2,18 +2,29 @@
 //   vendor/monaco    - monaco-editor AMD build (min/vs)
 //   vendor/onig      - vscode-oniguruma (onig.wasm + loader)
 //   vendor/textmate  - vscode-textmate CJS release
-//   vendor/grammars  - TextMate grammars from microsoft/vscode (main)
+//   vendor/grammars  - TextMate grammars from microsoft/vscode (pinned commit)
 //   vendor/themes    - VS Code Dark+/Light+ themes
 // Run: node scripts/vendor.mjs
+//
+// Reproducibility: every npm dependency is pinned to an exact version and the
+// VS Code grammar sources are pinned to one commit SHA, so re-running this
+// script produces the same assets (no floating `latest` / `main`).
 import { execSync } from 'node:child_process';
 import { mkdirSync, rmSync, existsSync, readdirSync, copyFileSync, writeFileSync, readFileSync } from 'node:fs';
+import { cp } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const VENDOR = join(ROOT, 'vendor');
 const TMP = join(VENDOR, '.tmp');
-const VSCODE_REF = 'main';
+
+// Pinned dependency versions (must match what is currently vendored).
+const MONACO_VERSION = '0.56.0';
+const ONIG_VERSION = '2.0.1';
+const TEXTMATE_VERSION = '9.3.2';
+// Pinned microsoft/vscode commit (grammars + themes are fetched from it).
+const VSCODE_REF = '2c0f00a6017866a92ca066889e719067d4351469';
 const RAW = (p) => `https://raw.githubusercontent.com/microsoft/vscode/${VSCODE_REF}/${p}`;
 
 // The npm cache in $HOME may sit on a read-only mount (EROFS); keep it inside
@@ -50,29 +61,25 @@ async function fetchTo(url, dest) {
   console.log(`vendor: ${dest.replace(ROOT + '/', '')} (${(buf.length / 1024).toFixed(0)} KiB)`);
 }
 
-// 1. Monaco AMD build
-npmPack('monaco-editor', ['min/vs/loader.js'], join(TMP, 'monaco-probe'));
-rmSync(join(TMP, 'monaco-probe'), { recursive: true });
+// 1. Monaco AMD build (pinned version)
 {
-  console.log('vendor: packing monaco-editor...');
-  execSync(`npm pack monaco-editor --pack-destination ${TMP} --silent`, { stdio: 'inherit' });
+  console.log(`vendor: packing monaco-editor@${MONACO_VERSION}...`);
+  execSync(`npm pack monaco-editor@${MONACO_VERSION} --pack-destination ${TMP} --silent`, { stdio: 'inherit' });
   const tgz = readdirSync(TMP).find((f) => f.endsWith('.tgz'));
   execSync(`tar -xzf ${join(TMP, tgz)} -C ${TMP}`);
-  const monacoDest = join(VENDOR, 'monaco');
-  mkdirSync(monacoDest, { recursive: true });
-  execSync(`cp -r ${join(TMP, 'package/min/vs')} ${monacoDest}/vs`);
+  await cp(join(TMP, 'package/min/vs'), join(VENDOR, 'monaco', 'vs'), { recursive: true });
   rmSync(join(TMP, tgz));
   rmSync(join(TMP, 'package'), { recursive: true });
   console.log('vendor: monaco/vs copied');
 }
 
 // 2. vscode-oniguruma (onig.wasm + CJS loader)
-npmPack('vscode-oniguruma', ['release/onig.wasm', 'release/main.js'], join(VENDOR, 'onig'));
+npmPack(`vscode-oniguruma@${ONIG_VERSION}`, ['release/onig.wasm', 'release/main.js'], join(VENDOR, 'onig'));
 
 // 3. vscode-textmate (CJS release, self-contained)
-npmPack('vscode-textmate', ['release/main.js'], join(VENDOR, 'textmate'));
+npmPack(`vscode-textmate@${TEXTMATE_VERSION}`, ['release/main.js'], join(VENDOR, 'textmate'));
 
-// 4. TextMate grammars from microsoft/vscode
+// 4. TextMate grammars from microsoft/vscode (pinned VSCODE_REF commit)
 const GRAMMARS = {
   'JavaScript.tmLanguage.json': 'source.js',
   'JavaScriptReact.tmLanguage.json': 'source.js.jsx',

@@ -19,12 +19,14 @@ Plugin para o DeepSeek Harness (DSH) que adiciona à GUI web um **explorer de ar
 | Ícones | Fonte **codicon** do VS Code (UI/pastas) + tema de ícones **Seti** (arquivos, o padrão do VS Code) |
 | Posição na UI | Painel **encaixado como coluna real da grade do app** (redimensiona o chat), colapsável, redimensionável e **móvel** (esquerda/direita) |
 | Idioma | Segue o locale ativo da GUI (dicionários `pt`, `en`, `zh`) |
+| Autor | dgadelha |
+| Repositório | https://github.com/dgadelha1/dsh-explorer-plugin |
 | Licença | MIT |
 
 ## 2. Estrutura do pacote
 
 ```
-dsh-explorer-plugni/
+dsh-explorer-plugin/
 ├── package.json            # dsh.bundle.patch + dsh.client + exports
 ├── cordis.patch.yml        # insere a linha do plugin servidor
 ├── LICENSE                 # MIT
@@ -34,8 +36,10 @@ dsh-explorer-plugni/
 │   └── client.js           # bundle cliente (factory CJS do __ModuleLoader__) — fonte única, sem build
 ├── src/                    # cópias-fonte (exports ./src/*) mantidas sincronizadas
 ├── scripts/
-│   ├── vendor.mjs          # baixa os assets para vendor/ (idempotente)
+│   ├── vendor.mjs          # baixa os assets para vendor/ (idempotente; versões pinadas)
 │   ├── merge-themes.mjs    # JSONC -> JSON estrito + merge da cadeia include dos temas
+│   ├── sync.mjs            # copia src/ -> lib/ (--check falha se divergirem; roda no prepack)
+│   ├── server-test.mjs     # teste de regressão do servidor (sandbox/allowlist, caps, watcher sem crash)
 │   ├── smoke-client.cjs    # smoke test do bundle (loader stub em Node)
 │   └── syntax-test-driver.cjs  # teste headless do pipeline TextMate (puppeteer + Firefox)
 └── vendor/                 # assets servidos em runtime (commitados no repo)
@@ -52,7 +56,7 @@ dsh-explorer-plugni/
 
 ```jsonc
 {
-  "name": "dsh-explorer-plugni",
+  "name": "dsh-explorer-plugin",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -85,7 +89,7 @@ O plugin servidor exporta `{ name: 'explorer', inject: ['webServer', 'connection
 ```yaml
 - insert:
     - id: explorer
-      name: 'dsh-explorer-plugni'
+      name: 'dsh-explorer-plugin'
 ```
 
 ## 3. Parte servidora (`lib/index.js`)
@@ -104,15 +108,16 @@ Endpoints (todos com `{root, …}`; caminhos sempre relativos à raiz):
 | `fs/stat` | `{root, path}` | `{exists, path, name, isDir, size, mtimeMs, hidden}` (missing → `{exists:false}`) |
 | `fs/list` | `{root, path, includeHidden}` | `{path, entries:[{name,path,isDir,size,mtimeMs,hidden}]}` (pastas 1º, nome-sorted; dotfiles filtrados por `includeHidden`) |
 | `fs/read` | `{root, path}` | `{content, size, mtimeMs}` — binário → `{binary:true}`; > 2 MB → `{tooLarge:true, size}` |
-| `fs/readLarge` | `{root, path}` | conteúdo sem limite (usado para abrir read-only) |
-| `fs/write` | `{root, path, content}` | `{written, mtimeMs, size}` (escrita atômica temp+rename; mkdir -p do pai) |
+| `fs/readLarge` | `{root, path}` | conteúdo até **50 MB** (acima → `{tooLarge:true, size}`; usado para abrir read-only) |
+| `fs/write` | `{root, path, content}` | `{written, mtimeMs, size}` (escrita atômica temp+rename com `O_EXCL` e cleanup do temp; mkdir -p do pai; **payload limitado a 50 MB**) |
 | `fs/create` | `{root, path, kind:'file'\|'dir'}` | `{path}` (falha `directory-exists` se já existe) |
 | `fs/rename` | `{root, path, newName}` | `{path}` (mesmo diretório) |
 | `fs/move` | `{root, path, targetDir}` | `{path}` (outro diretório; colisão → `directory-exists`) |
 | `fs/delete` | `{root, path}` | `{deleted:true}` (arquivo ou pasta recursiva; raiz bloqueada) |
 
 Regras:
-- **Confinamento/sandbox**: `path.resolve(root, …)` + verificação de prefixo; caminhos existentes passam por `realpath` do ancestral mais profundo (bloqueia symlink que escape da raiz). Escapar → `bad-request`.
+- **Confinamento/sandbox**: `path.resolve(root, …)` + verificação de prefixo; caminhos existentes passam por `realpath` do ancestral mais profundo (bloqueia symlink que escape da raiz). Escapar → `bad-request`. Reads re-confirmam o `realpath` do arquivo imediatamente antes do I/O (janela TOCTOU reduzida).
+- **Root validado no servidor (não confiado ao cliente)**: o `root` enviado pelo cliente precisa ser o cwd canônico de uma sessão viva ou um path do workspace registry — caso contrário `bad-request`/`403`. Isso impede ler/gravar diretórios arbitrários (`/`, `/etc`, `~`) pela API loopback. O canal RPC já é protegido contra CSRF pela plataforma (`isTrustedApiRequest`: Host loopback + Origin/same-site).
 - `root` validado como diretório existente a cada chamada.
 - Códigos de erro apenas do schema RPC compartilhado (`bad-request`, `directory-exists`, `directory-unreadable`, `internal`) — o schema do cliente rejeita códigos desconhecidos.
 - Binário detectado por byte NUL nos primeiros 8 KB.
@@ -127,6 +132,7 @@ Regras:
 ### 3.3 Watcher
 
 - `fs.watch(root, {recursive:true})` (Node ≥ 20, inotify) com debounce ~120 ms; fallback não-recursivo se recursivo falhar.
+- **`error` do watcher tratado**: um `FSWatcher` sem listener de `error` derruba o processo Node inteiro (ocorreu em produção). Agora o handler fecha o watcher, acorda os clientes SSE uma vez (refresh) e agenda **uma única recriação** após 2 s — nunca crasha o servidor.
 - Uma instância por raiz ativa, compartilhada entre conexões SSE (refcount por cliente).
 - Eventos agrupados → broadcast para os clientes daquela raiz; o cliente faz refresh da árvore com debounce.
 
@@ -134,10 +140,11 @@ Regras:
 
 ### 4.1 Registro e arquitetura
 
-- Bundle no formato `window.__ModuleLoader__.load({id:'dsh-explorer-plugni', factory})`, exportando `apply` + `inject`.
+- Bundle no formato `window.__ModuleLoader__.load({id:'dsh-explorer-plugin', factory})`, exportando `apply` + `inject`.
 - `inject` (serviços): `['slots','layout','connection','sessions','workspaces','locale','theme']`.
 - `apply(ctx)`: registra dicionários `explorer` (pt/en/zh) e o componente `ExplorerPanel` no slot `shell.overlay` (list, root) do `ui-layout`.
 - Dependências de runtime do bundle: apenas `react` (via `require`); todo o resto via serviços do `ctx`. CSS injetado via `<style>` (reivindicado pelo `claimStyles`).
+- **Cores 100% do tema**: todo o CSS usa tokens do design-system do DSH (`--dsw-*` — textos, bordas, fundos, hover, diálogos, shadows) e `color-mix()` para sobreposições translúcidas; **nenhum hex/rgb é hardcoded**. A barra de status usa a cor de destaque (`--dsw-alias-state-business-primary`); pastas/ponto de não-salvo usam o âmbar do tema (`--dsw-alias-state-warn-*`); erros usam `--dsw-alias-state-error-*`. O painel segue claro/escuro automaticamente via `body[data-ds-dark-theme]` do app.
 - Assets de runtime carregados por script clássico/fetch de `/explorer-assets` (monaco AMD via `loader.js` + `require.config({paths:{vs}})`; onig/textmate como UMD clássicos → `window.onig` / `window.vscodetextmate`; onig.wasm via `loadWASM({data})`).
 
 ### 4.2 Painel: encaixado na grade (redimensiona o chat)
@@ -152,7 +159,7 @@ Regras:
 
 - Nós carregados **lazy** (1 nível por expansão via `fs/list`); pastas primeiro, alfabético.
 - **Ocultos por padrão** (dotfiles, `node_modules`…) com toggle no cabeçalho (persistido).
-- **Ícones**: pastas = codicon do VS Code (âmbar `#dcb67a`, aberta/fechada); arquivos = **tema Seti oficial** (`vs-seti-icon-theme.json` + `seti.woff`), com look-up `fileNames → fileExtensions → languageIds → _default` e variantes claras/escuras; fallback codicon enquanto o Seti carrega.
+- **Ícones**: pastas = codicon do VS Code (cor âmbar do tema, aberta/fechada); arquivos = **tema Seti oficial** (`vs-seti-icon-theme.json` + `seti.woff`), com look-up `fileNames → fileExtensions → languageIds → _default` e variantes claras/escuras; fallback codicon enquanto o Seti carrega.
 - Ações por item (hover, glifos codicon): novo arquivo/pasta (pastas), duplicar (arquivos), renomear, mover, excluir (confirmação).
 - **Watcher**: assina `/explorer/events?root=…`; refresh com debounce 300 ms; estado expandido preservado.
 - Sem workspace: lista de workspaces + "Abrir pasta…" (`pickDirectory` + `create` + `startSession`).
@@ -162,18 +169,23 @@ Regras:
 - Abas estilo VS Code (topo azul na ativa, ponto âmbar de modificado, fechar com ×, middle-click/Ctrl+W).
 - **Fluxo único do Monaco** (evita corrida): `requireMonaco → ensureThemes → cria o editor (se preciso) → anexa o modelo da aba`; re-executa em troca de aba/readOnly/tema. Editor descartado no unmount do host.
 - Opções: `lineNumbers:'on'`, minimap off, `automaticLayout`, fonte 13, `readOnly` por aba.
+- **Quebra de linha opcional**: botão "Quebra" na status bar alterna `wordWrap` on/off (aplicado via `updateOptions`, sem recriar o editor); preferência persistida em `dsh-explorer.prefs` (`wrap`), padrão off.
 - **Temas**: `dark_plus.json`/`light_plus.json` são **JSONC + cadeia `include`** no repo do VS Code — o `scripts/merge-themes.mjs` os converte em **JSON estrito auto-contido** (65/64 regras, bg `#1E1E1E`/`#FFFFFF`) no vendoring. O editor só é criado após `defineTheme`, com fallback `vs-dark`/`vs` garantido (nunca branco no tema escuro).
 - **Coloração TextMate**:
   - Provider registrado **somente após** a grammar carregar (antes disso o tokenizador nativo do Monaco mantém cores provisórias).
   - **Re-tokenização em dois passos**: `setModelLanguage(model,'plaintext')` → de volta ao id original (o Monaco ignora `setLanguageId` com o mesmo id — causa histórica de "editor sem cores").
   - Grammars por extensão→languageId→escopo (manifest); fallback Monarch quando não há grammar.
 - **Ctrl+S** salva (com checagem de conflito por `mtimeMs`/`size` → diálogo Sobrescrever/Recarregar/Cancelar).
+- **Reducer puro + persistência**: o reducer do painel não tem efeitos colaterais; prefs (`includeHidden`, `open`, `side`, `width`, `splitPct`, `wrap`) são persistidas por um único `useEffect` sobre um cache em memória (`loadPrefs`/`savePrefs`), sem re-parse de `localStorage` a cada ação.
+- **Troca de workspace**: modelos Monaco antigos são descartados (`disposeAllModels`) ao mudar de root — o cache de modelos é chaveado por path relativo e vazaria/colisaria entre workspaces.
+- **Closures corretas no SSE**: o handler do `EventSource` lê `expanded`/`includeHidden` via refs, não via closure do efeito (que só re-roda na troca de root) — o refresh pós-watcher sempre usa o valor atual.
+- **`loadLarge` com teto**: `fs/readLarge` pode retornar `tooLarge` (cap de 50 MB); o cliente mostra o banner e não abre o arquivo.
 - **Binário** → aviso; **> 2 MB** → banner read-only com "Abrir mesmo assim".
 - **Ação rápida**: "Analisar"/"Corrigir" na status bar → `sessions.binding(cur).prompt([{type:'text', text: '<Ação>: <path-relativo>'}], 'queue')`.
 
 ### 4.5 Status bar
 
-- Barra azul `#007acc` estilo VS Code no editor: caminho do arquivo, tags read-only/não-salvo, botões Salvar (Ctrl+S), Analisar, Corrigir.
+- Barra de status na **cor de destaque do tema** (accent DSW) no editor: caminho do arquivo, tags read-only/não-salvo, botões Salvar (Ctrl+S), Analisar, Corrigir.
 - Rodapé discreto do painel: raiz do workspace + contagem de abas; erros em vermelho.
 
 ## 5. Instalação (documentada/reproduzível)
@@ -201,9 +213,9 @@ Regras:
 
 ## 7. Decisões de arquitetura (por quê)
 
-- **Sem build**: o formato do bundle cliente é um contrato estável (`__ModuleLoader__.load`); escrevê-lo à mão elimina tsdown/config e garante reprodutibilidade sem toolchain.
-- **Assets servidos pelo próprio plugin**: `/explorer-assets` (roteamento webServer do DSH) — nada de CDN externa, funciona offline.
-- **RPC próprio em vez de tools do agente**: leitura/escrita instantânea e fora do histórico da conversa; o sandbox é aplicado no servidor (confinamento à raiz).
+- **Sem build**: o formato do bundle cliente é um contrato estável (`__ModuleLoader__.load`); escrevê-lo à mão elimina tsdown/config e garante reprodutibilidade sem toolchain. `src/` é a fonte única; `lib/` é sincronizado por `scripts/sync.mjs` (gate no `prepack`).
+- **Assets servidos pelo próprio plugin**: `/explorer-assets` (roteamento webServer do DSH) — nada de CDN externa, funciona offline. **Vendor pinado** (monaco 0.56.0, oniguruma 2.0.1, textmate 9.3.2, grammars em commit fixo do microsoft/vscode) para vendoring reproduzível.
+- **RPC próprio em vez de tools do agente**: leitura/escrita instantânea e fora do histórico da conversa; o sandbox é aplicado no servidor (confinamento à raiz **+ allowlist de roots: só cwd de sessões vivas ou workspaces registrados**).
 - **JSONC → JSON no vendoring**: os temas do VS Code têm comentários e `include`; `response.json()` falharia em runtime (causa de editor branco).
 
 ## 8. Fora de escopo (v1)
