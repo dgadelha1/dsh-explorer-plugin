@@ -1,6 +1,6 @@
 {
   "name": "dsh-explorer-plugin",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "DSH File Explorer: workspace file tree + Monaco editor with real VS Code TextMate grammars, in the DSH Web GUI",
   "type": "module",
   "main": "lib/index.js",
