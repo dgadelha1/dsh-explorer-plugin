@@ -1,0 +1,15 @@
+# toolchain / install artifacts (regenerable)
+node_modules/
+.pnpm-home/
+.npm-cache/
+.bin/
+
+# runtime / test leftovers
+*.log
+.dshtest/
+.ff-profile/
+.syntax-test.png
+
+# OS
+.DS_Store
+Thumbs.db
