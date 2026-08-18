@@ -91,7 +91,10 @@
 
   /* ── screenshot ── */
   .shot {
-    margin-top: 48px; border: 1px solid var(--border); border-radius: var(--radius);
+    margin: 48px auto 0;
+    width: fit-content;      /* frame shrink-wraps the screenshot exactly */
+    max-width: 100%;
+    border: 1px solid var(--border); border-radius: var(--radius);
     background: rgba(15, 23, 42, 0.5); padding: 8px;
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
   }
@@ -105,7 +108,7 @@
   .dot-emerald { background: rgba(16, 185, 129, 0.8); }
   .shot-label { margin-left: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
   .shot img {
-    display: block; width: 100%; max-height: 600px; object-fit: contain;
+    display: block; width: auto; height: auto; max-width: 100%;
     background: var(--bg); border-radius: 0 0 calc(var(--radius) - 8px) calc(var(--radius) - 8px);
   }
 
