@@ -1,6 +1,8 @@
 // Smoke test: load the client bundle factory with a stubbed module loader.
+// All paths are derived from this file's location, so the test works from any
+// checkout (no hardcoded machine-specific paths).
 const path = require('path');
-const ws = '/home/dgadelha/HD_Externo/desenv/dsh-explorer-plugni';
+const ws = path.resolve(__dirname, '..');
 global.window = { __ModuleLoader__: { load: (handoff) => { global.__loaded = handoff; } } };
 global.document = undefined;
 global.localStorage = { getItem: () => null, setItem: () => {} };
@@ -14,7 +16,7 @@ global.require = (name) => {
 require(path.join(ws, 'lib/client.js'));
 const loaded = global.__loaded;
 if (!loaded) throw new Error('loader.load never called');
-if (loaded.id !== 'dsh-explorer-plugni') throw new Error('bad id: ' + loaded.id);
+if (loaded.id !== 'dsh-explorer-plugin') throw new Error('bad id: ' + loaded.id);
 const out = loaded.factory(global.require);
 if (typeof out.apply !== 'function') throw new Error('apply missing');
 if (!Array.isArray(out.inject)) throw new Error('inject missing');

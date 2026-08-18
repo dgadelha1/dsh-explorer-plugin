@@ -1,12 +1,16 @@
 // Drive the real Firefox (headless) against the live server's syntax test page.
-const puppeteer = require('/home/dgadelha/HD_Externo/desenv/dsh-explorer-plugni/.pnpm-home/node_modules/puppeteer-core');
+// All paths are derived from this file's location, so the test works from any
+// checkout (no hardcoded machine-specific paths).
+const path = require('path');
+const ws = path.resolve(__dirname, '..');
+const puppeteer = require(path.join(ws, '.pnpm-home/node_modules/puppeteer-core'));
 
 (async () => {
   const browser = await puppeteer.launch({
     browser: 'firefox',
     executablePath: '/usr/bin/firefox',
     headless: true,
-    args: ['--no-sandbox', '-profile', '/home/dgadelha/HD_Externo/desenv/dsh-explorer-plugni/.ff-profile'],
+    args: ['--no-sandbox', '-profile', path.join(ws, '.ff-profile')],
   });
   const page = await browser.newPage();
   const logs = [];
@@ -21,7 +25,7 @@ const puppeteer = require('/home/dgadelha/HD_Externo/desenv/dsh-explorer-plugni/
   console.log(result);
   console.log('=== LOGS ===');
   console.log(logs.slice(0, 20).join('\n') || '(no console output)');
-  await page.screenshot({ path: '/home/dgadelha/HD_Externo/desenv/dsh-explorer-plugni/.syntax-test.png' });
+  await page.screenshot({ path: path.join(ws, '.syntax-test.png') });
   await browser.close();
   process.exit(0);
 })().catch((e) => { console.error('DRIVER FAIL:', e); process.exit(1); });
