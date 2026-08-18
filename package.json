@@ -1,0 +1,43 @@
+{
+  "name": "dsh-explorer-plugni",
+  "version": "0.1.0",
+  "description": "DSH File Explorer: workspace file tree + Monaco editor with real VS Code TextMate grammars, in the DSH Web GUI",
+  "type": "module",
+  "main": "lib/index.js",
+  "author": "dgadelha",
+  "private": true,
+  "license": "MIT",
+  "files": [
+    "lib",
+    "src",
+    "vendor",
+    "cordis.patch.yml",
+    "SPEC.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./src/*": "./src/*",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-theme",
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    }
+  },
+  "scripts": {
+    "vendor": "node scripts/vendor.mjs"
+  }
+}
