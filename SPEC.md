@@ -1,5 +1,5 @@
 # DSH File Explorer — Especificação (v2, implementada)
-
+ 
 Plugin para o DeepSeek Harness (DSH) que adiciona à GUI web um **explorer de arquivos + editor de código** no estilo VS Code: árvore do workspace da sessão com CRUD completo, editor Monaco com numeração de linhas, abas múltiplas, coloração de sintaxe com grammars TextMate reais do VS Code (tema de ícones Seti + temas Dark+/Light+), integração com o agente (ação rápida) e locale seguindo a GUI.
 
 ---
@@ -19,7 +19,7 @@ Plugin para o DeepSeek Harness (DSH) que adiciona à GUI web um **explorer de ar
 | Ícones | Fonte **codicon** do VS Code (UI/pastas) + tema de ícones **Seti** (arquivos, o padrão do VS Code) |
 | Posição na UI | Painel **encaixado como coluna real da grade do app** (redimensiona o chat), colapsável, redimensionável e **móvel** (esquerda/direita) |
 | Idioma | Segue o locale ativo da GUI (dicionários `pt`, `en`, `zh`) |
-| Autor | dgadelha |
+| Autor | dgadelha1 |
 | Repositório | https://github.com/dgadelha1/dsh-explorer-plugin |
 | Licença | MIT |
 
