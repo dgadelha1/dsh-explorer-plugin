@@ -1,6 +1,6 @@
-# dsh-explorer-plugni bundle patch: inserts the File Explorer server plugin
+# dsh-explorer-plugin bundle patch: inserts the File Explorer server plugin
 # (RPC channel /rpc/explorer, static assets under /explorer-assets, SSE /explorer/events).
 # Applied after dsh-web-app's rows; row ids here are new, so this is a pure insert.
 - insert:
     - id: explorer
-      name: 'dsh-explorer-plugni'
+      name: 'dsh-explorer-plugin'
