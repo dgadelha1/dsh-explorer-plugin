@@ -2,11 +2,12 @@
 
 **DSH File Explorer** — árvore de arquivos do workspace + editor Monaco com gramáticas TextMate reais do VS Code, dentro da GUI web do DeepSeek Harness.
 
-![versão](https://img.shields.io/badge/versão-0.2.0-blue) ![licença](https://img.shields.io/badge/licença-MIT-green)
+![versão](https://img.shields.io/badge/versão-0.2.0-blue) ![licença](https://img.shields.io/badge/licença-MIT-green) [![site](https://img.shields.io/badge/site-GitHub%20Pages-38bdf8)](https://dgadelha1.github.io/dsh-explorer-plugin/)
 
 - **Autor:** [dgadelha](https://github.com/dgadelha1)
 - **Repositório:** https://github.com/dgadelha1/dsh-explorer-plugin
 - **Licença:** MIT
+- **Site:** https://dgadelha1.github.io/dsh-explorer-plugin/
 - **Documentos relacionados:** [Especificação técnica (PT)](SPEC.md) · [Especificação (EN)](SPEC.en.md) · [Resumo de marketing (PT)](MARKETING.md) · [Marketing (EN)](MARKETING.en.md)
 
 ---
@@ -217,6 +218,28 @@ node scripts/vendor.mjs
 - Confinamento ao workspace: `path.resolve` + verificação de prefixo; `realpath` do ancestral mais profundo bloqueia escapes por symlink
 - **Raiz validada no servidor** a cada chamada: só o cwd canônico de sessões vivas ou paths do workspace registry (nada de `/`, `/etc`, `~` pela API loopback)
 - CSRF protegido pela plataforma (`isTrustedApiRequest`); detecção de binários; limites de payload (2 MB inline, 50 MB read/write)
+
+---
+
+## Publicação (GitHub Pages)
+
+A landing page em `docs/index.html` é **autossuficiente** (HTML/CSS puro, sem build, sem dependências externas) e publicável no GitHub Pages:
+
+```bash
+# 1. Enviar o código e a tag de release
+git push -u origin main --tags
+
+# 2. No GitHub: Settings → Pages → Source → "Deploy from a branch"
+#    branch: main · pasta: /docs  (o .nojekyll em docs/ dispensa o Jekyll)
+
+# 3. Pronto — a página fica em:
+#    https://dgadelha1.github.io/dsh-explorer-plugin/
+```
+
+- **Atualizações:** basta dar push em `main` — o GitHub Pages republica automaticamente.
+- **Screenshot:** referenciado por caminho relativo (`./screenshot-0.20.png`); para trocar, substitua o PNG em `docs/` (o frame da página se ajusta sozinho ao tamanho da imagem).
+- **Versão:** mantenha o badge `v0.2.0` (header e rodapé do `docs/index.html`) em sincronia com o `package.json`.
+- **Verificação local:** `node scripts/render-check.cjs` abre a página no Firefox headless e valida carregamento, imagem e encaixe do frame (requer `puppeteer-core` + Firefox).
 
 ---
 
