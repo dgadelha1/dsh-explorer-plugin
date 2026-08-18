@@ -40,18 +40,20 @@ export default function LandingPage() {
             </a>
           </div>
 
-          {/* Screenshot Container */}
-          <div className="mt-12 rounded-xl border border-slate-800 bg-slate-900/50 p-2 shadow-2xl">
+          {/* Screenshot Container — w-fit mx-auto shrink-wraps the macOS-style
+              frame to the screenshot's exact size (611x950 portrait);
+              image scales down on small screens via max-w-full. */}
+          <div className="mt-12 rounded-xl border border-slate-800 bg-slate-900/50 p-2 shadow-2xl w-fit max-w-full mx-auto">
             <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-800 text-xs text-slate-500">
               <span className="w-3 h-3 rounded-full bg-rose-500/80"></span>
               <span className="w-3 h-3 rounded-full bg-amber-500/80"></span>
               <span className="w-3 h-3 rounded-full bg-emerald-500/80"></span>
               <span className="ml-2 font-mono">dsh web · explorer panel</span>
             </div>
-            {/* Screenshot: docs/screenshot-0.20.png (148 KB, 752x950 portrait).
-                 Relative path works when deploying this page from docs/;
-                 use "docs/screenshot-0.20.png" if the built page lives at the repo root. */}
-            <img src="./screenshot-0.20.png" alt="DSH Explorer Plugin — File Explorer panel" className="rounded-b-lg w-full max-h-[600px] object-contain bg-slate-950" />
+            {/* Screenshot: docs/screenshot-0.20.png. Relative path works when
+                 deploying this page from docs/; use "docs/screenshot-0.20.png"
+                 if the built page lives at the repo root. */}
+            <img src="./screenshot-0.20.png" alt="DSH Explorer Plugin — File Explorer panel" className="rounded-b-lg w-auto max-w-full h-auto bg-slate-950" />
           </div>
         </section>
 
