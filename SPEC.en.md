@@ -19,7 +19,7 @@ Plugin for the DeepSeek Harness (DSH) that adds to the web GUI a **file explorer
 | Icons | VS Code **codicon** font (UI/folders) + **Seti** icon theme (files, VS Code's default) |
 | UI placement | Panel **docked as a real column of the app grid** (resizes the chat), collapsible, resizable and **movable** (left/right) |
 | Language | Follows the active GUI locale (dictionaries `pt`, `en`, `zh`) |
-| Author | dgadelha |
+| Author | dgadelha1 |
 | Repository | https://github.com/dgadelha1/dsh-explorer-plugin |
 | License | MIT |
 

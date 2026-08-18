@@ -4,7 +4,7 @@
 
 ![versão](https://img.shields.io/badge/versão-0.2.0-blue) ![licença](https://img.shields.io/badge/licença-MIT-green) [![site](https://img.shields.io/badge/site-GitHub%20Pages-38bdf8)](https://dgadelha1.github.io/dsh-explorer-plugin/)
 
-- **Autor:** [dgadelha](https://github.com/dgadelha1)
+- **Autor:** [dgadelha1](https://github.com/dgadelha1)
 - **Repositório:** https://github.com/dgadelha1/dsh-explorer-plugin
 - **Licença:** MIT
 - **Site:** https://dgadelha1.github.io/dsh-explorer-plugin/
@@ -258,4 +258,4 @@ git push -u origin main --tags
 
 ## Licença
 
-**MIT** — Copyright (c) 2026 dgadelha. Uso livre para uso pessoal e comercial, com manutenção do aviso de copyright. O software é fornecido "como está", sem garantias. Consulte o [LICENSE](LICENSE) completo.
+**MIT** — Copyright (c) 2026 dgadelha1. Uso livre para uso pessoal e comercial, com manutenção do aviso de copyright. O software é fornecido "como está", sem garantias. Consulte o [LICENSE](LICENSE) completo.

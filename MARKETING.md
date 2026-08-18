@@ -1,7 +1,7 @@
 # dsh-explorer-plugin — Resumo para Marketing
 
 > **DSH File Explorer**: o editor de arquivos estilo VS Code dentro do DeepSeek Harness.
-> Versão **0.2.0** · Autor: **dgadelha** · Licença: **MIT**
+> Versão **0.2.0** · Autor: **dgadelha1** · Licença: **MIT**
 
 ---
 
@@ -107,9 +107,9 @@ dsh plugin --profile web add -w /caminho/absoluto/do/plugin
 
 ## 6. Autores e licença
 
-- **Autor:** [dgadelha](https://github.com/dgadelha1) — único autor/contribuidor
+- **Autor:** [dgadelha1](https://github.com/dgadelha1) — único autor/contribuidor
 - **Repositório:** [github.com/dgadelha1/dsh-explorer-plugin](https://github.com/dgadelha1/dsh-explorer-plugin)
-- **Licença:** **MIT** — Copyright (c) 2026 dgadelha
+- **Licença:** **MIT** — Copyright (c) 2026 dgadelha1
   - Uso livre para uso pessoal, comercial e modificação
   - Basta manter o aviso de copyright
   - Software fornecido "como está", sem garantias

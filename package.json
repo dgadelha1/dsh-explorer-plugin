@@ -4,7 +4,7 @@
   "description": "DSH File Explorer: workspace file tree + Monaco editor with real VS Code TextMate grammars, in the DSH Web GUI",
   "type": "module",
   "main": "lib/index.js",
-  "author": "dgadelha",
+  "author": "dgadelha1",
   "private": true,
   "license": "MIT",
   "repository": {
