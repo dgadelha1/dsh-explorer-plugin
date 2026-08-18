@@ -1,14 +1,20 @@
 // VS Code theme-defaults ship as JSONC partials with an include chain
 // (dark_plus -> dark_vs). The browser fetches strict JSON, so this merges
 // each pair into one self-contained theme file the client can JSON.parse.
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DIR = join(ROOT, 'vendor', 'themes');
 
-/** Strip // and /* *\/ comments and trailing commas from JSONC (string-aware). */
+/**
+ * Strip // and /* *\/ comments and trailing commas from JSONC.
+ * String-aware: string literals are copied verbatim (escapes included), so a
+ * `,}` sequence inside a string value is never mangled, and comments inside
+ * strings are not stripped. A trailing comma is dropped only when it is the
+ * last item before a closing `}` or `]` (whitespace between them allowed).
+ */
 export function stripJsonc(s) {
   let out = '';
   let i = 0;
@@ -16,6 +22,7 @@ export function stripJsonc(s) {
   while (i < n) {
     const c = s[i];
     if (c === '"') {
+      // Copy the whole string literal verbatim, honoring backslash escapes.
       let j = i + 1;
       while (j < n) {
         if (s[j] === '\\') { j += 2; continue; }
@@ -36,10 +43,20 @@ export function stripJsonc(s) {
       i += 2;
       continue;
     }
+    if (c === ',') {
+      // Peek ahead (skipping whitespace): drop the comma only when the next
+      // non-whitespace char closes the current object/array.
+      let j = i + 1;
+      while (j < n && (s[j] === ' ' || s[j] === '\t' || s[j] === '\n' || s[j] === '\r')) j++;
+      if (j < n && (s[j] === '}' || s[j] === ']')) {
+        i++;
+        continue;
+      }
+    }
     out += c;
     i++;
   }
-  return out.replace(/,(\s*[}\]])/g, '$1');
+  return out;
 }
 
 function readJsonc(name) {
@@ -69,7 +86,6 @@ merge('light_plus.json', 'light_vs.json');
 // drop the intermediate base files
 for (const f of ['dark_vs.json', 'light_vs.json']) {
   try {
-    const { rmSync, existsSync } = await import('node:fs');
     if (existsSync(join(DIR, f))) rmSync(join(DIR, f));
   } catch { /* ignore */ }
 }

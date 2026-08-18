@@ -1,5 +1,5 @@
 {
-  "name": "dsh-explorer-plugni",
+  "name": "dsh-explorer-plugin",
   "version": "0.1.0",
   "description": "DSH File Explorer: workspace file tree + Monaco editor with real VS Code TextMate grammars, in the DSH Web GUI",
   "type": "module",
@@ -7,6 +7,11 @@
   "author": "dgadelha",
   "private": true,
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dgadelha1/dsh-explorer-plugin.git"
+  },
+  "homepage": "https://github.com/dgadelha1/dsh-explorer-plugin",
   "files": [
     "lib",
     "src",
@@ -38,6 +43,10 @@
     }
   },
   "scripts": {
-    "vendor": "node scripts/vendor.mjs"
+    "vendor": "node scripts/vendor.mjs",
+    "sync": "node scripts/sync.mjs",
+    "check": "node scripts/sync.mjs --check",
+    "test": "node scripts/server-test.mjs && node scripts/smoke-client.cjs",
+    "prepack": "node scripts/sync.mjs"
   }
 }
