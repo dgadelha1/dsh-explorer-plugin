@@ -27,6 +27,11 @@ window.__ModuleLoader__.load({
 		function h(tag, props, ...children) { return React.createElement(tag, props, ...children); }
 		function cx() { var out = []; for (var i = 0; i < arguments.length; i++) if (arguments[i]) out.push(arguments[i]); return out.join(" "); }
 		function baseName(p) { var i = p.lastIndexOf("/"); return i < 0 ? p : p.slice(i + 1); }
+		function formatSize(bytes) {
+			if (bytes < 1024) return bytes + " B";
+			if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+			return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+		}
 		function dirName(p) { var i = p.lastIndexOf("/"); return i <= 0 ? "." : p.slice(0, i); }
 		function debounce(fn, ms) { var t = null; return function () { var a = arguments, s = this; clearTimeout(t); t = setTimeout(function () { fn.apply(s, a); }, ms); }; }
 		function fmtBytes(n) {
@@ -122,8 +127,62 @@ window.__ModuleLoader__.load({
 			// fallback (seti not loaded yet): codicon file glyph, themed color
 			return h("span", { className: "dx-ic dx-icon dx-file", "aria-hidden": true }, GLYPH.file);
 		}
-		function folderIcon(open) {
-			return h("span", { className: "dx-ic dx-icon dx-folder", "aria-hidden": true }, GLYPH[open ? "folder-opened" : "folder"]);
+
+		/** Map common project folder names to theme color tokens. */
+		var FOLDER_COLORS = {
+			"src": "var(--dsw-alias-state-business-primary)",       // blue
+			"lib": "var(--dsw-alias-state-success-primary)",        // green
+			"libs": "var(--dsw-alias-state-success-primary)",
+			"docs": "var(--dsw-alias-state-warn-primary)",          // amber
+			"doc": "var(--dsw-alias-state-warn-primary)",
+			"documentation": "var(--dsw-alias-state-warn-primary)",
+			"bin": "var(--dsw-alias-label-tertiary)",               // gray
+			"data": "var(--dsw-alias-state-info-primary)",          // cyan
+			"scripts": "var(--dsw-alias-state-business-secondary)", // lighter blue
+			"script": "var(--dsw-alias-state-business-secondary)",
+			"tools": "var(--dsw-alias-state-business-secondary)",
+			"tool": "var(--dsw-alias-state-business-secondary)",
+			"assets": "var(--dsw-alias-state-pink-primary)",        // pink (custom, fallback to warn)
+			"asset": "var(--dsw-alias-state-pink-primary)",
+			"scenes": "var(--dsw-alias-state-purple-primary)",      // purple (custom, fallback)
+			"scene": "var(--dsw-alias-state-purple-primary)",
+			"test": "var(--dsw-alias-state-error-primary)",         // red
+			"tests": "var(--dsw-alias-state-error-primary)",
+			"spec": "var(--dsw-alias-state-error-secondary)",
+			"specs": "var(--dsw-alias-state-error-secondary)",
+			"config": "var(--dsw-alias-label-secondary)",           // medium gray
+			"configs": "var(--dsw-alias-label-secondary)",
+			"build": "var(--dsw-alias-label-tertiary)",
+			"dist": "var(--dsw-alias-label-tertiary)",
+			"out": "var(--dsw-alias-label-tertiary)",
+			"vendor": "var(--dsw-alias-label-tertiary)",
+			"node_modules": "var(--dsw-alias-label-caption)",       // very light gray
+			".git": "var(--dsw-alias-label-caption)",
+			"public": "var(--dsw-alias-state-info-secondary)",
+			"static": "var(--dsw-alias-state-info-secondary)",
+			"images": "var(--dsw-alias-state-pink-primary)",
+			"img": "var(--dsw-alias-state-pink-primary)",
+			"media": "var(--dsw-alias-state-pink-primary)",
+			"components": "var(--dsw-alias-state-business-primary)",
+			"component": "var(--dsw-alias-state-business-primary)",
+			"pages": "var(--dsw-alias-state-business-primary)",
+			"views": "var(--dsw-alias-state-business-primary)",
+			"api": "var(--dsw-alias-state-success-secondary)",
+			"server": "var(--dsw-alias-state-success-secondary)",
+			"client": "var(--dsw-alias-state-business-primary)",
+			"packages": "var(--dsw-alias-state-business-secondary)",
+			"pkg": "var(--dsw-alias-state-business-secondary)",
+			"examples": "var(--dsw-alias-state-info-primary)",
+			"example": "var(--dsw-alias-state-info-primary)",
+			"samples": "var(--dsw-alias-state-info-primary)",
+			"demo": "var(--dsw-alias-state-info-primary)",
+			"demos": "var(--dsw-alias-state-info-primary)",
+		};
+
+		function folderIcon(open, name) {
+			var colorVar = FOLDER_COLORS[name] || null;
+			var style = colorVar ? { color: colorVar } : {};
+			return h("span", { className: "dx-ic dx-icon dx-folder", "aria-hidden": true, style: style }, GLYPH[open ? "folder-opened" : "folder"]);
 		}
 
 		// ───────────────────────── styles ─────────────────────────
@@ -161,21 +220,25 @@ window.__ModuleLoader__.load({
 
 /* tree */
 .dx-row{position:relative;display:flex;align-items:center;height:22px;padding-right:6px;cursor:pointer;white-space:nowrap;margin:0 0 0 6px}
-.dx-row:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dx-row:hover,.dx-row:focus-visible{background:var(--dsw-alias-interactive-bg-hover)}
 .dx-row.dx-selected{background:var(--dsw-alias-interactive-bg-active)}
 .dx-row.dx-selected::before{content:"";position:absolute;left:-6px;top:0;bottom:0;width:2px;background:var(--dsw-alias-state-business-primary)}
 .dx-chev{width:18px;height:22px;flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary);cursor:pointer;border:none;background:transparent;padding:0;font-size:11px}
-.dx-chev:hover{color:var(--dsw-alias-label-primary)}
+.dx-chev:hover,.dx-chev:focus-visible{color:var(--dsw-alias-label-primary)}
+.dx-chev:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}
 .dx-chev.dx-spacer{visibility:hidden;cursor:default}
 .dx-ic{flex:none;width:20px;text-align:center;font-size:16px;user-select:none}
 .dx-folder{color:var(--dsw-alias-state-warn-primary)}
 .dx-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;padding-left:6px;font-size:13px}
 .dx-actions{display:none;gap:0;flex:none;align-items:center}
-.dx-row:hover .dx-actions{display:inline-flex}
-.dx-act{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border:none;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;font-size:13px;border-radius:4px;padding:0;opacity:.85}
-.dx-act:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary);opacity:1}
+.dx-row:hover .dx-actions,.dx-row:focus-within .dx-actions{display:inline-flex}
+@media (hover: none) { .dx-actions{display:inline-flex} }
+.dx-act{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border:none;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;font-size:13px;border-radius:4px;padding:0;opacity:.85}
+.dx-act:hover,.dx-act:focus-visible{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary);opacity:1}
+.dx-act:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px}
 .dx-inline{flex:1;min-width:0;margin:0 6px 2px 24px;display:flex;gap:4px}
-.dx-inline input{flex:1;min-width:0;font:inherit;color:inherit;background:var(--dsw-alias-bg-mask-2);border:1px solid var(--dsw-alias-state-business-primary);border-radius:3px;padding:2px 6px;outline:none}
+.dx-inline input{flex:1;min-width:0;font:inherit;color:inherit;background:var(--dsw-alias-bg-mask-2);border:1px solid var(--dsw-alias-border-l2);border-radius:3px;padding:2px 6px}
+.dx-inline input:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:-2px;border-color:var(--dsw-alias-state-business-primary)}
 
 /* tabs (VS Code style) — deliberately slim: half-height, discreet */
 .dx-tabs{display:flex;flex:none;overflow-x:auto;background:var(--dsw-alias-bg-layer-1);border-bottom:1px solid var(--dsw-alias-border-l2);scrollbar-width:thin}
@@ -197,12 +260,12 @@ window.__ModuleLoader__.load({
 .dx-banner .dx-btns{margin-left:auto;display:flex;gap:6px}
 
 /* status bar (accent color of the active theme) */
-.dx-status{flex:none;display:flex;align-items:center;gap:8px;height:22px;padding:0 10px;background:var(--dsw-alias-state-business-primary);color:var(--dsw-static-neutral-00);font-size:12px;white-space:nowrap;overflow:hidden}
-.dx-status .dx-status-path{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;opacity:.95}
-.dx-status .dx-status-err{color:var(--dsw-alias-state-error-secondary);overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
-.dx-sbtn{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 8px;border:none;border-radius:3px;background:color-mix(in srgb,var(--dsw-static-neutral-00) 14%,transparent);color:var(--dsw-static-neutral-00);cursor:pointer;font-size:12px;flex:none}
-.dx-sbtn:hover{background:color-mix(in srgb,var(--dsw-static-neutral-00) 26%,transparent)}
-.dx-sbtn.dx-on{background:color-mix(in srgb,var(--dsw-static-neutral-00) 26%,transparent);box-shadow:inset 0 0 0 1px var(--dsw-static-neutral-00)}
+.dx-status{flex:none;display:flex;align-items:center;gap:8px;height:22px;padding:0 10px;background:var(--dsw-alias-bg-module-platform);color:var(--dsw-alias-label-primary);font-size:12px;white-space:nowrap;overflow:hidden;border-top:1px solid var(--dsw-alias-border-l2)}
+.dx-status .dx-status-path{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.dx-status .dx-status-err{color:var(--dsw-alias-state-error-primary);overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
+.dx-sbtn{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 8px;border:none;border-radius:3px;background:var(--dsw-alias-button-elevated-fill);color:var(--dsw-alias-label-primary);cursor:pointer;font-size:12px;flex-shrink:1;min-width:0}
+.dx-sbtn:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dx-sbtn.dx-on{background:var(--dsw-alias-state-business-primary);color:var(--dsw-static-neutral-00);box-shadow:inset 0 0 0 1px var(--dsw-alias-state-business-primary)}
 .dx-sbtn:disabled{opacity:.45;cursor:default}
 .dx-tag{display:inline-flex;align-items:center;height:18px;padding:0 6px;border:1px solid color-mix(in srgb,var(--dsw-static-neutral-00) 40%,transparent);border-radius:3px;font-size:10px;text-transform:uppercase;letter-spacing:.4px;flex:none;opacity:.9}
 .dx-tag.dx-warn{border-color:var(--dsw-alias-state-warn-secondary);color:var(--dsw-alias-state-warn-secondary)}
@@ -226,7 +289,7 @@ window.__ModuleLoader__.load({
 .dx-dlg-title{font-weight:600;margin-bottom:10px}
 .dx-dlg-body{margin-bottom:14px;opacity:.92;word-break:break-word}
 .dx-dlg-actions{display:flex;justify-content:flex-end;gap:8px}
-.dx-danger{background:var(--dsw-alias-state-error-primary);border-color:var(--dsw-alias-state-error-secondary)}
+.dx-danger{background:var(--dsw-alias-state-error-primary);border-color:var(--dsw-alias-state-error-secondary);color:var(--dsw-static-neutral-00)}
 .dx-danger:hover{background:var(--dsw-alias-state-error-secondary)}
 .dx-dialogbox input{flex:1;min-width:0;font:inherit;color:inherit;background:var(--dsw-alias-bg-mask-2);border:1px solid var(--dsw-alias-state-business-primary);border-radius:4px;padding:4px 8px;outline:none}
 
@@ -287,6 +350,10 @@ window.__ModuleLoader__.load({
 				"tree.newPlaceholder": "Nome do arquivo",
 				"tree.newFolderPlaceholder": "Nome da pasta",
 				"tree.movePlaceholder": "ex.: src/components",
+				"tree.expand": "Expandir",
+				"tree.collapse": "Recolher",
+				"tree.errorUnreadable": "Não foi possível ler {name}. Verifique as permissões.",
+				"tree.retry": "Tentar novamente",
 				"editor.save": "Salvar",
 				"editor.saved": "Salvo",
 				"editor.unsaved": "Não salvo",
@@ -299,6 +366,9 @@ window.__ModuleLoader__.load({
 				"editor.conflictBody": "{name} foi modificado fora do editor. O que deseja fazer?",
 				"editor.overwrite": "Sobrescrever",
 				"editor.reload": "Recarregar",
+				"editor.closeDirtyTitle": "Fechar sem salvar?",
+				"editor.closeDirtyBody": "Fechar {name} sem salvar? As alterações serão perdidas.",
+				"editor.discard": "Descartar alterações",
 				"editor.analyze": "Analisar",
 				"editor.fix": "Corrigir",
 				"editor.wrap": "Quebra de linha",
@@ -309,7 +379,10 @@ window.__ModuleLoader__.load({
 				"common.ok": "OK",
 				"common.cancel": "Cancelar",
 				"common.delete": "Excluir",
+				"common.error": "Erro",
 				"status.root": "{root}",
+				"status.tabs": "{count} aba",
+				"status.tabsPlural": "{count} abas",
 			},
 			en: {
 				"panel.title": "Explorer",
@@ -339,6 +412,10 @@ window.__ModuleLoader__.load({
 				"tree.newPlaceholder": "File name",
 				"tree.newFolderPlaceholder": "Folder name",
 				"tree.movePlaceholder": "e.g. src/components",
+				"tree.expand": "Expand",
+				"tree.collapse": "Collapse",
+				"tree.errorUnreadable": "Could not read {name}. Check permissions.",
+				"tree.retry": "Retry",
 				"editor.save": "Save",
 				"editor.saved": "Saved",
 				"editor.unsaved": "Unsaved",
@@ -351,6 +428,9 @@ window.__ModuleLoader__.load({
 				"editor.conflictBody": "{name} was modified outside the editor. What do you want to do?",
 				"editor.overwrite": "Overwrite",
 				"editor.reload": "Reload",
+				"editor.closeDirtyTitle": "Close without saving?",
+				"editor.closeDirtyBody": "Close {name} without saving? Changes will be lost.",
+				"editor.discard": "Discard changes",
 				"editor.analyze": "Analyze",
 				"editor.fix": "Fix",
 				"editor.wrap": "Word wrap",
@@ -361,7 +441,10 @@ window.__ModuleLoader__.load({
 				"common.ok": "OK",
 				"common.cancel": "Cancel",
 				"common.delete": "Delete",
+				"common.error": "Error",
 				"status.root": "{root}",
+				"status.tabs": "{count} tab",
+				"status.tabsPlural": "{count} tabs",
 			},
 			zh: {
 				"panel.title": "资源管理器",
@@ -391,6 +474,10 @@ window.__ModuleLoader__.load({
 				"tree.newPlaceholder": "文件名",
 				"tree.newFolderPlaceholder": "文件夹名",
 				"tree.movePlaceholder": "例如 src/components",
+				"tree.expand": "展开",
+				"tree.collapse": "折叠",
+				"tree.errorUnreadable": "无法读取 {name}。请检查权限。",
+				"tree.retry": "重试",
 				"editor.save": "保存",
 				"editor.saved": "已保存",
 				"editor.unsaved": "未保存",
@@ -403,6 +490,9 @@ window.__ModuleLoader__.load({
 				"editor.conflictBody": "{name} 已在编辑器外被修改。您想怎么做？",
 				"editor.overwrite": "覆盖",
 				"editor.reload": "重新加载",
+				"editor.closeDirtyTitle": "不保存就关闭？",
+				"editor.closeDirtyBody": "关闭 {name} 而不保存？更改将丢失。",
+				"editor.discard": "放弃更改",
 				"editor.analyze": "分析",
 				"editor.fix": "修复",
 				"editor.wrap": "自动换行",
@@ -413,7 +503,10 @@ window.__ModuleLoader__.load({
 				"common.ok": "确定",
 				"common.cancel": "取消",
 				"common.delete": "删除",
+				"common.error": "错误",
 				"status.root": "{root}",
+				"status.tabs": "{count} 个标签页",
+				"status.tabsPlural": "{count} 个标签页",
 			},
 		};
 
@@ -507,7 +600,7 @@ window.__ModuleLoader__.load({
 					},
 				});
 				return { registry: registry };
-			})().catch(function (e) { textmateReady = null; throw e; });
+			})().catch(function (e) { textmateReady = null; console.error("[dsh-explorer] TextMate init failed:", e); });
 			return textmateReady;
 		}
 
@@ -527,12 +620,16 @@ window.__ModuleLoader__.load({
 		function ensureGrammar(scope) {
 			if (!grammarPromises[scope]) {
 				grammarPromises[scope] = ensureTextmate().then(function (t) {
+					if (!t) return null; // TextMate init failed gracefully
 					return t.registry.loadGrammar(scope);
 				}).then(function (g) {
-					if (!g) throw new Error("no grammar for " + scope);
+					if (!g) return null;
 					loadedGrammars[scope] = g;
 					notifyGrammarReady(scope);
 					return g;
+				}).catch(function (e) {
+					console.error("[dsh-explorer] grammar load failed for", scope, e);
+					return null;
 				});
 			}
 			return grammarPromises[scope];
@@ -741,6 +838,7 @@ window.__ModuleLoader__.load({
 				includeHidden: !!prefs.includeHidden,
 				entries: {},
 				loading: {},
+				listErrors: {},
 				expanded: {},
 				tabs: [],
 				activePath: null,
@@ -766,7 +864,17 @@ window.__ModuleLoader__.load({
 					var entries = { ...state.entries, [action.path]: action.entries };
 					var loading = { ...state.loading };
 					delete loading[action.path];
-					return { ...state, entries: entries, loading: loading };
+					var listErrors = { ...state.listErrors };
+					delete listErrors[action.path]; // clear error on success
+					return { ...state, entries: entries, loading: loading, listErrors: listErrors };
+				}
+				case "SET_LIST_ERROR": {
+					return { ...state, listErrors: { ...state.listErrors, [action.path]: action.error } };
+				}
+				case "CLEAR_LIST_ERROR": {
+					var listErrors2 = { ...state.listErrors };
+					delete listErrors2[action.path];
+					return { ...state, listErrors: listErrors2 };
 				}
 				case "SET_LOADING": {
 					return { ...state, loading: { ...state.loading, [action.path]: true } };
@@ -800,6 +908,7 @@ window.__ModuleLoader__.load({
 					return { ...state, tabs: tabs3, activePath: activePath3 };
 				}
 				case "ACTIVATE_TAB": return { ...state, activePath: action.path };
+				case "SET_ACTIVE_PATH": return { ...state, activePath: action.path };
 				case "PANEL_OPEN": return { ...state, panelOpen: action.open };
 				case "PANEL_SIDE": return { ...state, side: action.side };
 				case "PANEL_WIDTH": return { ...state, width: action.width };
@@ -1000,8 +1109,11 @@ window.__ModuleLoader__.load({
 				callRpc(ctx, "fs/list", { root: root, path: rel, includeHidden: includeHidden }).then(function (r) {
 					dispatch({ type: "SET_ENTRIES", path: rel, entries: r.entries });
 				}).catch(function (e) {
-					dispatch({ type: "SET_ENTRIES", path: rel, entries: [] });
-					dispatch({ type: "NOTICE", notice: { kind: "error", text: String(e.message || e) } });
+					var errorMsg = e.code === "directory-unreadable"
+						? t("tree.errorUnreadable", { name: rel || "." })
+						: String(e.message || e);
+					dispatch({ type: "SET_LIST_ERROR", path: rel, error: errorMsg });
+					dispatch({ type: "NOTICE", notice: { kind: "error", text: errorMsg } });
 				});
 			}
 
@@ -1186,8 +1298,30 @@ window.__ModuleLoader__.load({
 							dispatch({ type: "UPDATE_TAB", path: p.path, patch: { path: newPath2, dir: value === "." ? "." : value } });
 						} else if (p.kind === "duplicate") {
 							var dup = dirName(p.path) + "/" + value;
-							var content = await callRpc(ctx, "fs/read", { root: state.root, path: p.path });
-							await callRpc(ctx, "fs/write", { root: state.root, path: dup, content: content.content || "" });
+							var source = await callRpc(ctx, "fs/read", { root: state.root, path: p.path });
+							if (source.isBinary) {
+								dispatch({ type: "NOTICE", notice: { kind: "error", text: t("editor.binary") } });
+								return;
+							}
+							if (source.tooLarge) {
+								dispatch({ type: "NOTICE", notice: { kind: "error", text: t("editor.tooLarge", { size: formatSize(source.size) }) } });
+								return;
+							}
+							if (!source.content) {
+								dispatch({ type: "NOTICE", notice: { kind: "error", text: "Cannot duplicate: no content" } });
+								return;
+							}
+							// Use fs/create (O_EXCL) to avoid silently overwriting an existing file.
+							try {
+								await callRpc(ctx, "fs/create", { root: state.root, path: dup, kind: "file" });
+								await callRpc(ctx, "fs/write", { root: state.root, path: dup, content: source.content });
+							} catch (e) {
+								if (e.code === "directory-exists" || (e.message && e.message.includes("EEXIST"))) {
+									dispatch({ type: "NOTICE", notice: { kind: "error", text: "File already exists: " + value } });
+								} else {
+									throw e;
+								}
+							}
 						}
 						refreshTree(state.root, state.expanded, state.includeHidden);
 					} catch (e) {
@@ -1270,7 +1404,10 @@ window.__ModuleLoader__.load({
 					},
 				},
 					h("div", { className: "dx-header" },
-						h("span", { className: "dx-title", title: state.root || "", children: t("panel.title") }),
+						h("span", { className: "dx-title", title: state.root || "", children: [
+							t("panel.title"),
+							state.root ? h("span", { style: { opacity: .6, marginLeft: 4, fontSize: 11 }, children: "— " + baseName(state.root) }) : null,
+						] }),
 						h("button", { className: "dx-tbtn", title: t("panel.newFile"), disabled: !state.root, onClick: function () { dispatch({ type: "PROMPT", prompt: { kind: "newfile", path: ".", placeholder: t("tree.newPlaceholder") } }); } }, icon("new-file")),
 						h("button", { className: "dx-tbtn", title: t("panel.newFolder"), disabled: !state.root, onClick: function () { dispatch({ type: "PROMPT", prompt: { kind: "newdir", path: ".", placeholder: t("tree.newFolderPlaceholder") } }); } }, icon("new-folder")),
 						h("button", { className: "dx-tbtn", title: t("panel.refresh"), disabled: !state.root, onClick: function () { if (state.root) refreshTree(state.root, state.expanded, state.includeHidden); } }, icon("refresh")),
@@ -1284,9 +1421,14 @@ window.__ModuleLoader__.load({
 								h(TreeView, {
 									t: t, root: state.root, entries: state.entries, loading: state.loading,
 									expanded: state.expanded, selected: state.activePath, includeHidden: state.includeHidden,
-									isLight: colorScheme === "light",
+									isLight: colorScheme === "light", listErrors: state.listErrors,
 									onToggle: toggleDir, onOpen: openFile, onDelete: confirmDelete,
 									onPrompt: function (p) { dispatch({ type: "PROMPT", prompt: p }); },
+									onSelect: function (path) { dispatch({ type: "SET_ACTIVE_PATH", path: path }); },
+									onRetry: function (path) {
+										dispatch({ type: "CLEAR_LIST_ERROR", path: path });
+										loadDir(state.root, path, state.includeHidden);
+									},
 								}),
 							),
 							h("div", { className: "dx-split", onMouseDown: startSplitDrag }, icon("grabber")),
@@ -1305,12 +1447,6 @@ window.__ModuleLoader__.load({
 										onToggleWrap: function () { dispatch({ type: "TOGGLE_WRAP" }); },
 									})
 									: h("div", { className: "dx-editor-empty", children: t("editor.placeholder") }),
-							),
-							h("div", { className: "dx-footer" },
-								state.notice
-									? h("span", { className: "dx-status-err", children: state.notice.text })
-									: h("span", { className: "dx-status-path", title: state.root, children: t("status.root", { root: state.root }) }),
-								state.tabs.length ? h("span", { children: state.tabs.length + (state.tabs.length === 1 ? " tab" : " tabs") }) : null,
 							),
 						)
 						: h(NoWorkspaceView, { t: t, workspacesSnap: workspacesSnap, onOpenFolder: openFolder, onPick: function (wsId) { ctx.workspaces.startSession(wsId); } }),
@@ -1331,13 +1467,35 @@ window.__ModuleLoader__.load({
 		}
 
 		// ───────────────────────── tree ─────────────────────────
+
+		/** Collect all visible nodes in the tree for keyboard navigation. */
+		function collectVisibleNodes(entries, expanded, parentPath) {
+			var result = [];
+			var nodes = entries[parentPath] || [];
+			for (var i = 0; i < nodes.length; i++) {
+				var node = nodes[i];
+				result.push(node);
+				if (node.isDir && expanded[node.path]) {
+					result = result.concat(collectVisibleNodes(entries, expanded, node.path));
+				}
+			}
+			return result;
+		}
+
 		function TreeView(props) {
 			var t = props.t;
 			var rootEntries = props.entries["."];
-			if (!rootEntries) return h("div", { className: "dx-hint", style: { padding: "8px 14px" }, children: t("tree.loading") });
-			return h("div", null,
-				rootEntries.map(function (e) { return h(TreeNode, { key: e.path, ...props, entry: e }); }),
-				rootEntries.length === 0 ? h("div", { className: "dx-hint", style: { padding: "8px 14px" }, children: t("tree.empty") }) : null,
+			var rootError = props.listErrors["."];
+			if (rootError) {
+				return h("div", { className: "dx-hint", style: { padding: "8px 14px", color: "var(--dsw-alias-state-error-primary)" }, children: [
+					h("span", { children: rootError }),
+					h("button", { style: { marginLeft: 8, fontSize: 11, background: "transparent", border: "1px solid var(--dsw-alias-border-l2)", borderRadius: 3, padding: "2px 8px", cursor: "pointer", color: "var(--dsw-alias-label-primary)" }, onClick: function () { props.onRetry("."); } }, h("span", { children: t("tree.retry") })),
+				] });
+			}
+			if (!rootEntries && !props.loading["."]) return h("div", { className: "dx-hint", style: { padding: "8px 14px" }, children: t("tree.loading") });
+			return h("div", { role: "tree", "aria-label": t("panel.title") },
+				rootEntries ? rootEntries.map(function (e) { return h(TreeNode, { key: e.path, ...props, entry: e, depth: 0, treeProps: props }); }) : null,
+				rootEntries && rootEntries.length === 0 ? h("div", { className: "dx-hint", style: { padding: "8px 14px" }, children: t("tree.empty") }) : null,
 			);
 		}
 
@@ -1348,12 +1506,52 @@ window.__ModuleLoader__.load({
 			var loading = !!props.loading[entry.path];
 			var children = props.entries[entry.path] || null;
 			var indent = { paddingLeft: 4 + depth * 14 };
+			var isSelected = props.selected === entry.path;
+
+			function handleKeyDown(e) {
+				if (e.key === "Enter") {
+					e.preventDefault();
+					if (isDir) { props.onToggle(entry.path); } else { props.onOpen(entry); }
+				} else if (e.key === "F2") {
+					e.preventDefault();
+					props.onPrompt({ kind: "rename", path: entry.path, placeholder: t("tree.renamePlaceholder"), value: entry.name });
+				} else if (e.key === "Delete") {
+					e.preventDefault();
+					props.onDelete(entry);
+				} else if (e.key === "ArrowRight" && isDir && !expanded) {
+					e.preventDefault();
+					props.onToggle(entry.path);
+				} else if (e.key === "ArrowLeft" && isDir && expanded) {
+					e.preventDefault();
+					props.onToggle(entry.path);
+				} else if (e.key === "ArrowDown") {
+					e.preventDefault();
+					// Navigate to next visible sibling or child
+					var allVisible = collectVisibleNodes(props.treeProps.entries, props.expanded, ".");
+					var idx = allVisible.findIndex(function(n) { return n.path === entry.path; });
+					if (idx >= 0 && idx < allVisible.length - 1) {
+						props.onSelect(allVisible[idx + 1].path);
+					}
+				} else if (e.key === "ArrowUp") {
+					e.preventDefault();
+					var allVisible2 = collectVisibleNodes(props.treeProps.entries, props.expanded, ".");
+					var idx2 = allVisible2.findIndex(function(n) { return n.path === entry.path; });
+					if (idx2 > 0) {
+						props.onSelect(allVisible2[idx2 - 1].path);
+					}
+				}
+			}
 
 			return h("div", null,
 				h("div", {
-					className: cx("dx-row", props.selected === entry.path && "dx-selected"),
+					role: "treeitem",
+					"aria-expanded": isDir ? expanded : undefined,
+					"aria-selected": isSelected,
+					tabIndex: 0,
+					className: cx("dx-row", isSelected && "dx-selected"),
 					style: indent,
 					title: entry.path,
+					onKeyDown: handleKeyDown,
 					onClick: function (e) {
 						if (e.target.closest(".dx-act") || e.target.closest(".dx-chev")) return;
 						props.onOpen(entry);
@@ -1361,26 +1559,32 @@ window.__ModuleLoader__.load({
 					onDoubleClick: function () { if (isDir) props.onToggle(entry.path); },
 				},
 					isDir
-						? h("button", { className: "dx-chev", onClick: function (e) { e.stopPropagation(); props.onToggle(entry.path); } }, icon(expanded ? "chevron-down" : "chevron-right"))
-						: h("span", { className: "dx-chev dx-spacer" }, icon("chevron-right")),
-					isDir ? folderIcon(expanded) : fileIcon(entry.name, props.isLight),
+						? h("button", { className: "dx-chev", "aria-label": expanded ? t("tree.collapse") : t("tree.expand"), onClick: function (e) { e.stopPropagation(); props.onToggle(entry.path); } }, icon(expanded ? "chevron-down" : "chevron-right"))
+						: h("span", { className: "dx-chev dx-spacer", "aria-hidden": "true" }, icon("chevron-right")),
+					isDir ? folderIcon(expanded, entry.name) : fileIcon(entry.name, props.isLight),
 					h("span", { className: "dx-name", children: entry.name }),
-					loading && isDir ? h("span", { className: "dx-spin dx-icon", style: { fontSize: 12, opacity: .6 } }, "◌") : null,
+					loading && isDir ? h("span", { className: "dx-spin dx-icon", style: { fontSize: 12, opacity: .6 }, "aria-hidden": "true" }, "◌") : null,
 					h("span", { className: "dx-actions" },
 						isDir ? [
-							h("button", { key: "nf", className: "dx-act", title: t("tree.newFile"), onClick: function (e) { e.stopPropagation(); props.onPrompt({ kind: "newfile", path: entry.path, placeholder: t("tree.newPlaceholder") }); } }, icon("new-file")),
-							h("button", { key: "nd", className: "dx-act", title: t("tree.newFolder"), onClick: function (e) { e.stopPropagation(); props.onPrompt({ kind: "newdir", path: entry.path, placeholder: t("tree.newFolderPlaceholder") }); } }, icon("new-folder")),
+							h("button", { key: "nf", className: "dx-act", "aria-label": t("tree.newFile"), title: t("tree.newFile"), onClick: function (e) { e.stopPropagation(); props.onPrompt({ kind: "newfile", path: entry.path, placeholder: t("tree.newPlaceholder") }); } }, icon("new-file")),
+							h("button", { key: "nd", className: "dx-act", "aria-label": t("tree.newFolder"), title: t("tree.newFolder"), onClick: function (e) { e.stopPropagation(); props.onPrompt({ kind: "newdir", path: entry.path, placeholder: t("tree.newFolderPlaceholder") }); } }, icon("new-folder")),
 						] : [
-							h("button", { key: "dup", className: "dx-act", title: t("tree.duplicate"), onClick: function (e) { e.stopPropagation(); props.onPrompt({ kind: "duplicate", path: entry.path, placeholder: t("tree.newPlaceholder") }); } }, icon("copy")),
+							h("button", { key: "dup", className: "dx-act", "aria-label": t("tree.duplicate"), title: t("tree.duplicate"), onClick: function (e) { e.stopPropagation(); props.onPrompt({ kind: "duplicate", path: entry.path, placeholder: t("tree.newPlaceholder") }); } }, icon("copy")),
 						],
-						h("button", { key: "mv", className: "dx-act", title: t("tree.move"), onClick: function (e) { e.stopPropagation(); props.onPrompt({ kind: "move", path: entry.path, placeholder: t("tree.movePlaceholder") }); } }, icon("arrow-right")),
-						h("button", { key: "rn", className: "dx-act", title: t("tree.rename"), onClick: function (e) { e.stopPropagation(); props.onPrompt({ kind: "rename", path: entry.path, placeholder: t("tree.renamePlaceholder"), value: entry.name }); } }, icon("edit")),
-						h("button", { key: "del", className: "dx-act", title: t("tree.delete"), onClick: function (e) { e.stopPropagation(); props.onDelete(entry); } }, icon("trash")),
+						h("button", { key: "mv", className: "dx-act", "aria-label": t("tree.move"), title: t("tree.move"), onClick: function (e) { e.stopPropagation(); props.onPrompt({ kind: "move", path: entry.path, placeholder: t("tree.movePlaceholder") }); } }, icon("arrow-right")),
+						h("button", { key: "rn", className: "dx-act", "aria-label": t("tree.rename"), title: t("tree.rename"), onClick: function (e) { e.stopPropagation(); props.onPrompt({ kind: "rename", path: entry.path, placeholder: t("tree.renamePlaceholder"), value: entry.name }); } }, icon("edit")),
+						h("button", { key: "del", className: "dx-act", "aria-label": t("tree.delete"), title: t("tree.delete"), onClick: function (e) { e.stopPropagation(); props.onDelete(entry); } }, icon("trash")),
 					),
 				),
-				isDir && expanded
-					? (children === null ? null : children.map(function (c) { return h(TreeNode, { key: c.path, ...props, entry: c, depth: depth + 1 }); }))
-					: null,
+				// Show error inline for directories that failed to load
+				isDir && expanded && props.listErrors[entry.path]
+					? h("div", { style: { paddingLeft: 4 + (depth + 1) * 14, color: "var(--dsw-alias-state-error-primary)", fontSize: 11, padding: "4px 0" } }, [
+						h("span", { children: props.listErrors[entry.path] }),
+						h("button", { style: { marginLeft: 8, background: "transparent", border: "1px solid var(--dsw-alias-border-l2)", borderRadius: 3, padding: "1px 6px", cursor: "pointer", color: "var(--dsw-alias-label-primary)", fontSize: 11 }, onClick: function () { props.onRetry(entry.path); } }, h("span", { children: t("tree.retry") })),
+					])
+					: (isDir && expanded
+						? (children === null ? null : children.map(function (c) { return h(TreeNode, { key: c.path, ...props, entry: c, depth: depth + 1 }); }))
+						: null),
 			);
 		}
 
@@ -1431,10 +1635,13 @@ window.__ModuleLoader__.load({
 					),
 				) : null,
 				h("div", { className: "dx-status" },
-					h("span", { className: "dx-status-path", title: tab.path, children: tab.path }),
+					h("span", { className: "dx-status-path", title: tab.path, children: [
+						tab.name || baseName(tab.path),
+						tab.content != null ? h("span", { style: { opacity: .6, marginLeft: 6 }, children: "(" + tab.content.split("\n").length + " lines · " + formatSize(new TextEncoder().encode(tab.content).length) + ")" }) : null,
+					] }),
 					tab.readOnly ? h("span", { className: "dx-tag", children: t("editor.readOnly") }) : null,
 					tab.dirty ? h("span", { className: "dx-tag dx-warn", children: t("editor.unsaved") }) : null,
-					h("button", { className: "dx-sbtn", disabled: !props.onSave || tab.readOnly, onClick: props.onSave }, h("span", { children: t("editor.save") }), h("span", { style: { opacity: .7, fontSize: 11 }, children: "Ctrl+S" })),
+					h("button", { className: "dx-sbtn", disabled: !props.onSave || tab.readOnly, onClick: props.onSave }, h("span", { children: t("editor.save") }), h("span", { style: { opacity: .7, fontSize: 11 }, children: typeof navigator !== "undefined" && /Mac|iPod|iPhone|iPad/.test(navigator.platform) ? "⌘S" : "Ctrl+S" })),
 					h("button", { className: "dx-sbtn", disabled: !props.onAnalyze, onClick: props.onAnalyze }, h("span", { children: t("editor.analyze") })),
 					h("button", { className: "dx-sbtn", disabled: !props.onFix, onClick: props.onFix }, h("span", { children: t("editor.fix") })),
 					h("button", { className: cx("dx-sbtn", props.wrap && "dx-on"), title: t("editor.wrap"), onClick: props.onToggleWrap }, h("span", { children: t("editor.wrapShort") })),
@@ -1548,9 +1755,10 @@ window.__ModuleLoader__.load({
 				okLabel = t("editor.overwrite");
 				choices = ["cancel", "reload", "overwrite"];
 			} else if (c.kind === "closeDirty") {
-				title = t("editor.unsaved");
-				body = t("editor.conflictBody", { name: c.name });
-				okLabel = t("common.ok");
+				title = t("editor.closeDirtyTitle");
+				body = t("editor.closeDirtyBody", { name: c.name });
+				okLabel = t("editor.discard");
+				okClass = "dx-danger";
 				choices = ["cancel", "ok"];
 			} else {
 				title = t("common.error");
@@ -1558,9 +1766,22 @@ window.__ModuleLoader__.load({
 				okLabel = t("common.ok");
 				choices = ["ok"];
 			}
-			return h("div", { className: "dx-dialog" },
+			var dialogRef = useRef(null);
+			useEffect(function () {
+				if (dialogRef.current) {
+					dialogRef.current.focus();
+					var firstBtn = dialogRef.current.querySelector("button");
+					if (firstBtn) firstBtn.focus();
+				}
+				function handleKey(e) {
+					if (e.key === "Escape") props.onConfirm("cancel");
+				}
+				document.addEventListener("keydown", handleKey);
+				return function () { document.removeEventListener("keydown", handleKey); };
+			}, []);
+			return h("div", { className: "dx-dialog", role: "dialog", "aria-modal": "true", "aria-labelledby": "dlg-title", tabIndex: -1, ref: dialogRef, onKeyDown: function (e) { if (e.key === "Escape") props.onConfirm("cancel"); } },
 				h("div", { className: "dx-dialogbox" },
-					h("div", { className: "dx-dlg-title", children: title }),
+					h("div", { id: "dlg-title", className: "dx-dlg-title", children: title }),
 					h("div", { className: "dx-dlg-body", children: body }),
 					h("div", { className: "dx-dlg-actions" },
 						choices.indexOf("cancel") >= 0 ? h("button", { key: "cancel", className: "dx-btn", onClick: function () { props.onConfirm("cancel"); } }, h("span", { children: t("common.cancel") })) : null,
@@ -1582,7 +1803,20 @@ window.__ModuleLoader__.load({
 			else if (p.kind === "rename") { label = t("tree.rename"); value = p.value || ""; }
 			else if (p.kind === "move") label = t("tree.confirmMoveBody");
 			else if (p.kind === "duplicate") label = t("tree.duplicate");
-			return h("div", { className: "dx-dialog" },
+			var promptRef = useRef(null);
+			useEffect(function () {
+				if (promptRef.current) {
+					promptRef.current.focus();
+					var input = promptRef.current.querySelector("input");
+					if (input) { input.focus(); input.select(); }
+				}
+				function handleKey(e) {
+					if (e.key === "Escape") props.onCancel();
+				}
+				document.addEventListener("keydown", handleKey);
+				return function () { document.removeEventListener("keydown", handleKey); };
+			}, []);
+			return h("div", { className: "dx-dialog", role: "dialog", "aria-modal": "true", tabIndex: -1, ref: promptRef, onKeyDown: function (e) { if (e.key === "Escape") props.onCancel(); } },
 				h("div", { className: "dx-dialogbox" },
 					h("div", { className: "dx-dlg-title", children: label }),
 					h("div", { style: { display: "flex", gap: 8 } },

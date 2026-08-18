@@ -49,6 +49,46 @@ const WATCHER_RETRY_MS = 2000;
 const SSE_HEARTBEAT_MS = 25_000;
 /** Concurrency for per-entry stat() during directory listing. */
 const LIST_STAT_CONCURRENCY = 32;
+/** Max concurrent SSE connections (DoS guard). */
+const MAX_SSE_CONNECTIONS = 64;
+
+/**
+ * Validate that an HTTP request comes from a trusted origin, mirroring the
+ * platform's isTrustedApiRequest logic. Rejects cross-site and non-loopback
+ * requests to prevent DNS rebinding and LAN exposure.
+ */
+function isTrustedRequest(req) {
+  const host = req.headers.host ?? '';
+  const origin = req.headers.origin ?? '';
+  const secFetchSite = req.headers['sec-fetch-site'] ?? '';
+  // Parse the Host header to get hostname.
+  let hostname;
+  try {
+    const url = new URL(`http://${host}`);
+    hostname = url.hostname;
+  } catch {
+    return false;
+  }
+  // Accept only loopback hosts (127.0.0.1, ::1, localhost).
+  if (!isLoopbackHostname(hostname)) return false;
+  // Reject cross-site requests.
+  if (secFetchSite === 'cross-site') return false;
+  // If Origin is present, it must match the host (same-origin).
+  if (origin !== '') {
+    try {
+      const originUrl = new URL(origin);
+      if (originUrl.hostname !== hostname || originUrl.port !== new URL(`http://${host}`).port) return false;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** Check if a hostname is loopback. */
+function isLoopbackHostname(hostname) {
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '[::1]';
+}
 
 const MIME = {
   '.js': 'text/javascript; charset=utf-8',
@@ -283,6 +323,12 @@ async function endpointList(root, rel, includeHidden) {
   } catch (error) {
     throw new FsError('directory-unreadable', `cannot list ${abs}: ${error?.message ?? error}`, { path: abs });
   }
+  // Cap entries to prevent DoS from giant directories (e.g., node_modules).
+  const MAX_LIST_ENTRIES = 10_000;
+  const truncated = dirents.length > MAX_LIST_ENTRIES;
+  if (truncated) {
+    dirents = dirents.slice(0, MAX_LIST_ENTRIES);
+  }
   const rows = await mapLimit(dirents, LIST_STAT_CONCURRENCY, async (d) => {
     if (d.name === '.' || d.name === '..') return null;
     const full = join(abs, d.name);
@@ -314,7 +360,7 @@ async function endpointList(root, rel, includeHidden) {
   });
   const entries = rows.filter(Boolean);
   entries.sort((a, b) => (b.isDir - a.isDir) || a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
-  return ok({ path: relative(root, abs) || '.', entries });
+  return ok({ path: relative(root, abs) || '.', entries, truncated });
 }
 
 /**
@@ -397,7 +443,21 @@ async function endpointWrite(root, rel, content) {
     } finally {
       await fh.close();
     }
-    await rename(tmp, abs);
+    // Re-confine immediately before rename to close the TOCTOU window where
+    // a concurrent actor swaps a parent directory for a symlink pointing
+    // outside the workspace root.
+    const finalAbs = await confineReal(root, rel);
+    await rename(tmp, finalAbs);
+    // Post-rename validation: realpath the result and ensure it's still
+    // within the workspace root. If a symlink was planted between the
+    // re-confine above and the rename, this catches it.
+    const realPath = await realpath(finalAbs);
+    const realRoot = await realpath(root);
+    if (!realPath.startsWith(realRoot + sep) && realPath !== realRoot) {
+      // Rollback: remove the file that escaped the root.
+      try { await rm(finalAbs, { force: true }); } catch { /* best-effort */ }
+      throw new FsError('internal', 'write target escaped workspace root after rename', { issues: [] });
+    }
     tmp = null; // committed; nothing to clean up
   } catch (error) {
     throw new FsError('internal', `write failed for ${rel}: ${error?.message ?? error}`);
@@ -454,7 +514,18 @@ async function endpointRename(root, rel, newName) {
   const abs = await confineReal(root, rel);
   const target = join(dirname(abs), newName);
   try {
-    await rename(abs, target);
+    // Re-confine immediately before rename to close the TOCTOU window.
+    const finalAbs = await confineReal(root, rel);
+    const finalTarget = join(dirname(finalAbs), newName);
+    await rename(finalAbs, finalTarget);
+    // Post-rename validation via realpath.
+    const realPath = await realpath(finalTarget);
+    const realRoot = await realpath(root);
+    if (!realPath.startsWith(realRoot + sep) && realPath !== realRoot) {
+      // Rollback: rename back to original path.
+      try { await rename(finalTarget, finalAbs); } catch { /* best-effort */ }
+      throw new FsError('internal', 'rename target escaped workspace root', { issues: [] });
+    }
   } catch (error) {
     if (error?.code === 'ENOENT') throw new FsError('bad-request', `not found: ${rel}`, { issues: [] });
     throw new FsError('internal', `rename failed: ${error?.message ?? error}`);
@@ -476,7 +547,19 @@ async function endpointMove(root, rel, targetDir) {
   if (!tst.isDirectory()) throw new FsError('bad-request', `target is not a directory: ${targetDir}`, { issues: [] });
   const target = join(tdir, basename(abs));
   try {
-    await rename(abs, target);
+    // Re-confine immediately before rename to close the TOCTOU window.
+    const finalAbs = await confineReal(root, rel);
+    const finalTdir = await confineReal(root, targetDir);
+    const finalTarget = join(finalTdir, basename(finalAbs));
+    await rename(finalAbs, finalTarget);
+    // Post-rename validation via realpath.
+    const realPath = await realpath(finalTarget);
+    const realRoot = await realpath(root);
+    if (!realPath.startsWith(realRoot + sep) && realPath !== realRoot) {
+      // Rollback: move back to original location.
+      try { await rename(finalTarget, finalAbs); } catch { /* best-effort */ }
+      throw new FsError('internal', 'move target escaped workspace root', { issues: [] });
+    }
   } catch (error) {
     if (error?.code === 'ENOENT') throw new FsError('bad-request', `not found: ${rel}`, { issues: [] });
     if (error?.code === 'EEXIST' || error?.code === 'ENOTEMPTY') {
@@ -492,7 +575,12 @@ async function endpointDelete(root, rel) {
   const abs = await confineReal(root, rel);
   if (abs === root) throw new FsError('bad-request', 'cannot delete the workspace root', { issues: [] });
   try {
-    await rm(abs, { recursive: true, force: false });
+    // Re-confine immediately before rm to close the TOCTOU window where
+    // a concurrent actor swaps a parent directory for a symlink pointing
+    // outside the workspace root.
+    const finalAbs = await confineReal(root, rel);
+    if (finalAbs === root) throw new FsError('bad-request', 'cannot delete the workspace root', { issues: [] });
+    await rm(finalAbs, { recursive: true, force: false });
   } catch (error) {
     if (error?.code === 'ENOENT') throw new FsError('bad-request', `not found: ${rel}`, { issues: [] });
     throw new FsError('internal', `delete failed: ${error?.message ?? error}`);
@@ -556,6 +644,12 @@ function assetPathFor(pathname) {
 }
 
 async function staticHandler(req, res) {
+  // Trust fence: reject cross-site and non-loopback requests.
+  if (!isTrustedRequest(req)) {
+    res.writeHead(403);
+    res.end('forbidden');
+    return;
+  }
   const url = new URL(req.url, 'http://localhost');
   if (url.pathname === '/explorer-assets' || url.pathname === '/explorer-assets/') {
     res.writeHead(302, { Location: '/explorer-assets/monaco/vs/loader.js' });
@@ -705,6 +799,19 @@ function stopWatcherIfIdle(root) {
 }
 
 async function eventsHandler(req, res, ctx) {
+  // Trust fence: reject cross-site and non-loopback requests to prevent DNS
+  // rebinding attacks and LAN exposure without authentication.
+  if (!isTrustedRequest(req)) {
+    res.writeHead(403);
+    res.end('forbidden');
+    return;
+  }
+  // DoS guard: cap concurrent SSE connections.
+  if (sseClients.size >= MAX_SSE_CONNECTIONS) {
+    res.writeHead(503);
+    res.end('too many connections');
+    return;
+  }
   const url = new URL(req.url, 'http://localhost');
   const rootParam = url.searchParams.get('root') ?? '';
   let root;
