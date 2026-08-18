@@ -122,6 +122,60 @@ check('fs/create invalid kind rejected', r.ok === false && r.error.code === 'bad
 r = await call('fs/rename', { root: allowed, path: 'hello.txt', newName: 'a\u0000b' });
 check('fs/rename NUL rejected', r.ok === false && r.error.code === 'bad-request', JSON.stringify(r));
 
+// ── root itself cannot be renamed/moved/deleted ──
+r = await call('fs/rename', { root: allowed, path: '.', newName: 'moved' });
+check('fs/rename of the root rejected', r.ok === false && r.error.code === 'bad-request', JSON.stringify(r));
+r = await call('fs/move', { root: allowed, path: '.', targetDir: 'sub' });
+check('fs/move of the root rejected', r.ok === false && r.error.code === 'bad-request', JSON.stringify(r));
+r = await call('fs/delete', { root: allowed, path: '.' });
+check('fs/delete of the root rejected', r.ok === false && r.error.code === 'bad-request', JSON.stringify(r));
+
+// ── symlink workspace root: normal ops work, root guards still hold ──
+const { symlinkSync: makeSymlink } = require('node:fs');
+const linkRoot = join(wsRoot, 'linkroot');
+makeSymlink(allowed, linkRoot);
+r = await call('fs/list', { root: linkRoot, path: '.', includeHidden: true });
+check('fs/list works through a symlink root', r.ok === true && r.value.entries.some((e) => e.name === 'hello.txt'), JSON.stringify(r));
+r = await call('fs/read', { root: linkRoot, path: 'hello.txt' });
+check('fs/read works through a symlink root', r.ok === true && r.value.content.includes('hello'), JSON.stringify(r));
+r = await call('fs/delete', { root: linkRoot, path: '.' });
+check('fs/delete of symlink root rejected', r.ok === false && r.error.code === 'bad-request', JSON.stringify(r));
+r = await call('fs/rename', { root: linkRoot, path: '.', newName: 'x' });
+check('fs/rename of symlink root rejected', r.ok === false && r.error.code === 'bad-request', JSON.stringify(r));
+
+// ── write through a symlinked directory is confined ──
+const outsideDir = join(wsRoot, 'outside-dir');
+mkdirSync(outsideDir);
+makeSymlink(outsideDir, join(allowed, 'sub-link'));
+r = await call('fs/write', { root: allowed, path: 'sub-link/new.txt', content: 'x' });
+check('fs/write through out-of-root symlink dir rejected', r.ok === false && r.error.code === 'bad-request', JSON.stringify(r));
+r = await call('fs/create', { root: allowed, path: 'sub-link/new2.txt', kind: 'file' });
+check('fs/create through out-of-root symlink dir rejected', r.ok === false && r.error.code === 'bad-request', JSON.stringify(r));
+
+// ── out-of-root symlinks are hidden from listings (no metadata leak) ──
+makeSymlink(outside, join(allowed, 'leaky-link'));
+r = await call('fs/list', { root: allowed, path: '.', includeHidden: true });
+check('out-of-root symlink hidden from fs/list', r.ok === true && !r.value.entries.some((e) => e.name === 'leaky-link'), JSON.stringify(r));
+
+// ── FIFO/special files never reach readFile (would hang the handler) ──
+const { execSync } = require('node:child_process');
+const fifo = join(allowed, 'pipe.fifo');
+try {
+  execSync(`mkfifo "${fifo}"`);
+  r = await call('fs/read', { root: allowed, path: 'pipe.fifo' });
+  check('fs/read of a FIFO rejected (no hang)', r.ok === false && r.error.code === 'bad-request', JSON.stringify(r));
+  r = await call('fs/readLarge', { root: allowed, path: 'pipe.fifo' });
+  check('fs/readLarge of a FIFO rejected (no hang)', r.ok === false && r.error.code === 'bad-request', JSON.stringify(r));
+} catch (e) {
+  check('fs/read of a FIFO rejected (no hang)', false, 'mkfifo failed: ' + e.message);
+}
+
+// ── prototype-chain endpoint names are cleanly rejected ──
+for (const bad of ['__proto__', 'constructor', 'hasOwnProperty']) {
+  r = await call(bad, { root: allowed, path: '.' });
+  check(`endpoint ${bad} -> bad-request`, r.ok === false && r.error.code === 'bad-request', JSON.stringify(r));
+}
+
 // ── watcher error: deleting the watched dir must NOT crash the process ──
 // The client always subscribes with the exact workspace root (never a
 // subdirectory), and the allowlist is exact-match, so watch `allowed` itself.
