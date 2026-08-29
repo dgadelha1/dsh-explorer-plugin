@@ -18,8 +18,6 @@ Plugin para o **DeepSeek Harness (DSH)** que adiciona à GUI web um painel **exp
 
 O painel é **encaixado como uma coluna real da grade do app** — abre/fecha, redimensiona o chat, é colapsável, redimensionável e móvel (esquerda/direita).
 
-![Screenshot do painel File Explorer + editor Monaco com coloração TextMate, encaixado na GUI web do DSH](docs/screenshot-0.20.png)
-
 ---
 
 ## Funcionalidades
