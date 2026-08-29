@@ -8,7 +8,7 @@
 - **Repositório:** https://github.com/dgadelha1/dsh-explorer-plugin
 - **Licença:** MIT
 - **Site:** https://dgadelha1.github.io/dsh-explorer-plugin/
-- **Documentos relacionados:** [Especificação técnica (PT)](SPEC.md) · [Especificação (EN)](SPEC.en.md) · [Resumo de marketing (PT)](MARKETING.md) · [Marketing (EN)](MARKETING.en.md)
+- **Documentos relacionados:** [Guia de instalação (scripts)](INSTALL.md) · [Especificação técnica (PT)](SPEC.md) · [Especificação (EN)](SPEC.en.md) · [Resumo de marketing (PT)](MARKETING.md) · [Marketing (EN)](MARKETING.en.md)
 
 ---
 
@@ -53,6 +53,20 @@ Detalhes completos na [especificação (SPEC.md)](SPEC.md).
 ## Instalação (passo a passo verificado)
 
 > As instruções abaixo foram **testadas de ponta a ponta** contra o DSH 0.1.0-rc.7 + pnpm 9.15.9. O comando `dsh plugin` encaminha os argumentos para o pnpm rodando dentro do diretório do profile (`$DSH_HOME/profiles/<nome>`), instala o pacote e **reconcilia automaticamente** a lista `dsh.profile.bundles` do profile.
+
+### Instalação rápida (scripts prontos)
+
+Os scripts abaixo automatizam os Passos 1–2 desta seção e imprimem o Passo 3: validam os pré-requisitos (node, `dsh` e pnpm — usando a cópia local `.pnpm-home/` quando o pnpm não está no PATH), executam o `dsh plugin add -w` e mostram como reiniciar o `dsh web`.
+
+| Plataforma | Instalar | Validar | Remover |
+|---|---|---|---|
+| Windows | `scripts\install.bat` | `scripts\install.bat --check` | `scripts\install.bat --remove` |
+| Linux | `scripts/install.sh` | `scripts/install.sh --check` | `scripts/install.sh --remove` |
+| macOS | `scripts/install-macos.sh` | `scripts/install-macos.sh --check` | `scripts/install-macos.sh --remove` |
+
+Profile configurável via `DSH_PROFILE` (padrão `web`). Detalhes, variáveis de ambiente e solução de problemas no [INSTALL.md](INSTALL.md).
+
+> ⚠️ **Windows:** o `dsh` (shim npm) precisa ser invocado com `call` dentro de um `.bat` — os scripts já fazem isso. A validação foi feita de ponta a ponta: instalação real, reconciliação dos bundles e remoção (DSH 0.1.1-rc.2 + pnpm 9.15.9 via `.pnpm-home/`).
 
 ### Passo 1 — (Opcional) Garantir os assets do runtime
 
@@ -162,6 +176,7 @@ dsh-explorer-plugin/
 ├── package.json            # metadados + dsh.bundle.patch + dsh.client + exports
 ├── cordis.patch.yml        # camada de patch do bundle (insere o plugin servidor)
 ├── LICENSE                 # MIT
+├── INSTALL.md              # guia dos scripts de instalação (uso, modos, solução de problemas)
 ├── SPEC.md / SPEC.en.md    # especificação técnica (PT/EN)
 ├── MARKETING.md / MARKETING.en.md  # resumo de marketing (PT/EN)
 ├── lib/
@@ -169,6 +184,9 @@ dsh-explorer-plugin/
 │   └── client.js           # bundle cliente (formato __ModuleLoader__) — sem build
 ├── src/                    # cópias-fonte (exportadas via ./src/*); sincronizadas com lib/
 ├── scripts/
+│   ├── install.bat         # instalador Windows (cmd): --check / --remove / --help
+│   ├── install.sh          # instalador Linux (POSIX sh): --check / --remove / --help
+│   ├── install-macos.sh    # instalador macOS (bash): --check / --remove / --help
 │   ├── vendor.mjs          # baixa os assets para vendor/ (idempotente, versões pinadas)
 │   ├── merge-themes.mjs    # JSONC → JSON estrito + merge da cadeia include dos temas
 │   ├── sync.mjs            # copia src/ → lib/ (--check falha se divergirem; roda no prepack)
@@ -247,7 +265,8 @@ git push -u origin main --tags
 
 | Sintoma | Causa / solução |
 |---|---|
-| `pnpm not found on PATH` | Instale o pnpm ou use o shim local: `PATH="$PWD/.bin:$PATH" dsh plugin ...` |
+| `'pnpm' não é reconhecido` / `pnpm not found on PATH` | Os scripts usam o shim local `.pnpm-home/` automaticamente; sem ele, instale o pnpm (`corepack enable` / `npm install -g pnpm`) |
+| `CLI 'dsh' não encontrado` | Instale com `npm install -g @deepseek-ai/dsh` (no Windows o script também procura em `%APPDATA%\npm\dsh.cmd`) |
 | `ERR_PNPM_ADDING_TO_ROOT` | Faltou a flag `-w`: use `dsh plugin --profile web add -w <caminho>` |
 | O painel não aparece após instalar | Reinicie o `dsh web` (a composição de bundles ocorre no boot) e recarregue a página |
 | Editor sem cores | O provider TextMate registra após a grammar carregar; se persistir, recarregue a página (assets com `no-cache`) |

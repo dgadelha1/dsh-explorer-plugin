@@ -195,27 +195,33 @@
       <div><p class="number">100%</p><p class="label">offline assets</p></div>
     </section>
 
-    <!-- Quick Install (commands verified end-to-end against dsh 0.1.0-rc.7 + pnpm 9.15.9) -->
+    <!-- Quick Install (scripts validated end-to-end against dsh 0.1.1-rc.2 + pnpm 9.15.9) -->
     <section id="install" class="install">
       <h2>
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
         Try it
       </h2>
-      <pre class="code"># 1. (Optional) Re-vendor assets — vendor/ is committed, so a fresh clone
-#    already ships everything; run this only to refresh pinned versions.
-node scripts/vendor.mjs
+      <pre class="code"># Quick path — ready-made installers (validate prerequisites, run
+# `dsh plugin add -w`, and print the restart step):
+scripts\install.bat              # Windows
+scripts/install.sh               # Linux
+scripts/install-macos.sh         # macOS
+#   dry run:     scripts\install.bat --check
+#   uninstall:   scripts\install.bat --remove
 
-# 2. Install the plugin into the web profile.
-#    The -w flag is REQUIRED: without it pnpm fails with
-#    ERR_PNPM_ADDING_TO_ROOT (the profile is a pnpm workspace root).
+# Manual path — install into the web profile.
+# The -w flag is REQUIRED: without it pnpm fails with
+# ERR_PNPM_ADDING_TO_ROOT (the profile is a pnpm workspace root).
 dsh plugin --profile web add -w .            # from the plugin checkout
-#   or: dsh plugin --profile web add -w /absolute/path/to/dsh-explorer-plugin
 
-# 3. Restart the web server (bundles are composed at boot)
+# Restart the web server (bundles are composed at boot)
 dsh web</pre>
       <p class="foot-note">
-        Requires the <code>dsh</code> CLI and pnpm ≥ 8 on your PATH.
+        Requires the <code>dsh</code> CLI and pnpm ≥ 8 on your PATH — the scripts
+        also fall back to the vendored copy in <code>.pnpm-home/</code>.
         Full details in the
+        <a href="https://github.com/dgadelha1/dsh-explorer-plugin/blob/main/INSTALL.md">install guide</a>
+        and the
         <a href="https://github.com/dgadelha1/dsh-explorer-plugin/blob/main/README.md">README</a>.
       </p>
     </section>

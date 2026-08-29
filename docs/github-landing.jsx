@@ -65,25 +65,28 @@ export default function LandingPage() {
           <div><p className="text-3xl font-bold text-sky-400">100%</p><p className="text-xs text-slate-400">offline assets</p></div>
         </section>
 
-        {/* Quick Install — commands verified end-to-end against dsh 0.1.0-rc.7 + pnpm 9.15.9 */}
+        {/* Quick Install — scripts validated end-to-end against dsh 0.1.1-rc.2 + pnpm 9.15.9 */}
         <section id="install" className="bg-slate-900 border border-slate-800 rounded-xl p-6">
           <h2 className="text-xl font-bold mb-4 flex items-center gap-2"><Terminal size={20} className="text-sky-400"/> Try it</h2>
           <pre className="bg-slate-950 p-4 rounded-lg font-mono text-sm text-emerald-400 overflow-x-auto border border-slate-800">
-{`# 1. (Optional) Re-vendor assets — vendor/ is committed, so a fresh clone
-#    already ships everything; run this only to refresh pinned versions.
-node scripts/vendor.mjs
+{`# Quick path — ready-made installers (validate prerequisites, run
+# \`dsh plugin add -w\`, and print the restart step):
+scripts\\install.bat              # Windows
+scripts/install.sh               # Linux
+scripts/install-macos.sh         # macOS
+#   dry run:     scripts\\install.bat --check
+#   uninstall:   scripts\\install.bat --remove
 
-# 2. Install the plugin into the web profile.
-#    The -w flag is REQUIRED: without it pnpm fails with
-#    ERR_PNPM_ADDING_TO_ROOT (the profile is a pnpm workspace root).
+# Manual path — install into the web profile.
+# The -w flag is REQUIRED: without it pnpm fails with
+# ERR_PNPM_ADDING_TO_ROOT (the profile is a pnpm workspace root).
 dsh plugin --profile web add -w .            # from the plugin checkout
-#   or: dsh plugin --profile web add -w /absolute/path/to/dsh-explorer-plugin
 
-# 3. Restart the web server (bundles are composed at boot)
+# Restart the web server (bundles are composed at boot)
 dsh web`}
           </pre>
           <p className="text-xs text-slate-500 mt-3">
-            Requires the <code className="text-slate-400">dsh</code> CLI and pnpm ≥ 8 on your PATH. Full details in the <a href="https://github.com/dgadelha1/dsh-explorer-plugin/blob/main/README.md" className="text-sky-400 hover:underline">README</a>.
+            Requires the <code className="text-slate-400">dsh</code> CLI and pnpm ≥ 8 on your PATH — the scripts also fall back to the vendored copy in <code className="text-slate-400">.pnpm-home/</code>. Full details in the <a href="https://github.com/dgadelha1/dsh-explorer-plugin/blob/main/INSTALL.md" className="text-sky-400 hover:underline">install guide</a> and the <a href="https://github.com/dgadelha1/dsh-explorer-plugin/blob/main/README.md" className="text-sky-400 hover:underline">README</a>.
           </p>
         </section>
       </main>
