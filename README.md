@@ -148,6 +148,8 @@ scripts/restart-web.sh
 
 ![Plugin instalado na GUI do DSH — painel File Explorer na lateral](docs/dsh-explorer-installed.png)
 
+![dsh-explorer-plugin instalado na GUI do DSH — painel File Explorer em uso](docs/dsh-explorer-plugin-installed.png)
+
 ### Para remover
 
 ```bash
