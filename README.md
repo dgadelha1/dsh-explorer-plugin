@@ -146,6 +146,8 @@ scripts/restart-web.sh
 2. O painel **File Explorer** deve aparecer na lateral (colapsável/móvel esquerda-direita).
 3. Com uma sessão ativa, a árvore mostra o workspace; sem sessão, aparece o fluxo "abrir pasta".
 
+![Plugin instalado na GUI do DSH — painel File Explorer na lateral](docs/dsh-explorer-installed.png)
+
 ### Para remover
 
 ```bash
