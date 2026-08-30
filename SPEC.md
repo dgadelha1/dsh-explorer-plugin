@@ -185,7 +185,7 @@ Regras:
 - **Closures corretas no SSE**: o handler do `EventSource` lê `expanded`/`includeHidden` via refs, não via closure do efeito (que só re-roda na troca de root) — o refresh pós-watcher sempre usa o valor atual.
 - **`loadLarge` com teto**: `fs/readLarge` pode retornar `tooLarge` (cap de 50 MB); o cliente mostra o banner e não abre o arquivo.
 - **Binário** → aviso; **> 2 MB** → banner read-only com "Abrir mesmo assim".
-- **Ação rápida**: "Analisar"/"Corrigir" na status bar → `sessions.binding(cur).prompt([{type:'text', text: '<Ação>: <path-relativo>'}], 'queue')`.
+- **Ação rápida**: "Analisar"/"Corrigir" na status bar → `sessions.binding(cur).session.prompt([{type:'text', text: '<instrução por locale>'}], 'queue')`. A instrução (template `editor.analyzePrompt`/`editor.fixPrompt` com `{path}` interpolado) pede relatório/diagnóstico estruturado e **confirmação explícita antes de modificar o arquivo** — o plugin nunca grava automaticamente nesse fluxo (escritas reais passam pela camada de permissões/approval do DSH).
 
 ### 4.5 Status bar
 

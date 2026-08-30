@@ -375,6 +375,8 @@ window.__ModuleLoader__.load({
 				"editor.wrapShort": "Quebra",
 				"editor.sendHint": "Enviar caminho para o agente",
 				"editor.noSession": "Nenhuma sessão ativa para enviar ao agente.",
+				"editor.analyzePrompt": "Analise o arquivo {path} e apresente um relatório estruturado: o que ele faz, pontos fortes, problemas e riscos, e sugestões de melhoria. IMPORTANTE: não modifique nenhum arquivo nesta etapa — depois do relatório, pergunte ao usuário quais melhorias ele quer aplicar e só aplique após a confirmação explícita.",
+				"editor.fixPrompt": "Corrija os problemas do arquivo {path}. Primeiro apresente um diagnóstico curto: problemas encontrados e alterações propostas. IMPORTANTE: não edite o arquivo ainda — pergunte ao usuário se pode aplicar a correção e só edite após a confirmação explícita.",
 				"editor.loadFailed": "Falha ao carregar o editor: {error}",
 				"common.ok": "OK",
 				"common.cancel": "Cancelar",
@@ -437,6 +439,8 @@ window.__ModuleLoader__.load({
 				"editor.wrapShort": "Wrap",
 				"editor.sendHint": "Send path to the agent",
 				"editor.noSession": "No active session to send to the agent.",
+				"editor.analyzePrompt": "Analyze the file {path} and present a structured report: what it does, strengths, issues and risks, and improvement suggestions. IMPORTANT: do not modify any file in this step — after the report, ask the user which improvements they want applied, and only apply them after explicit confirmation.",
+				"editor.fixPrompt": "Fix the issues in {path}. First present a short diagnosis: problems found and proposed changes. IMPORTANT: do not edit the file yet — ask the user whether you may apply the fix, and only edit after explicit confirmation.",
 				"editor.loadFailed": "Failed to load the editor: {error}",
 				"common.ok": "OK",
 				"common.cancel": "Cancel",
@@ -499,6 +503,8 @@ window.__ModuleLoader__.load({
 				"editor.wrapShort": "换行",
 				"editor.sendHint": "将路径发送给代理",
 				"editor.noSession": "没有可发送给代理的活动会话。",
+				"editor.analyzePrompt": "分析文件 {path} 并给出结构化报告：功能概述、优点、问题与风险、改进建议。重要：此阶段不要修改任何文件——报告完成后，询问用户希望应用哪些改进，只有在用户明确确认后才进行修改。",
+				"editor.fixPrompt": "修复文件 {path} 中的问题。先给出简短诊断：发现的问题与拟议的修改。重要：暂不要编辑文件——先询问用户是否可以应用修复，只有在用户明确确认后才进行编辑。",
 				"editor.loadFailed": "加载编辑器失败：{error}",
 				"common.ok": "确定",
 				"common.cancel": "取消",
@@ -1291,9 +1297,8 @@ window.__ModuleLoader__.load({
 				if (!cur) { dispatch({ type: "NOTICE", notice: { kind: "error", text: t("editor.noSession") } }); return; }
 				var binding = ctx.sessions.binding(cur);
 				if (!binding) { dispatch({ type: "NOTICE", notice: { kind: "error", text: t("editor.noSession") } }); return; }
-				var label = kind === "analyze" ? t("editor.analyze") : t("editor.fix");
-				var text = label + ": " + path;
-				binding.prompt([{ type: "text", text: text }], "queue").then(function (res) {
+				var text = kind === "analyze" ? t("editor.analyzePrompt", { path: path }) : t("editor.fixPrompt", { path: path });
+				binding.session.prompt([{ type: "text", text: text }], "queue").then(function (res) {
 					if (!res.ok) throw new Error(res.error.code + ": " + res.error.message);
 				}).catch(function (e) {
 					dispatch({ type: "NOTICE", notice: { kind: "error", text: String(e.message || e) } });

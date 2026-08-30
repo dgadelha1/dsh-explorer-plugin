@@ -32,7 +32,7 @@ Na prática: enquanto o agente de IA trabalha no workspace da sessão, o usuári
 
 ### 🔄 Integração com o agente
 - **Watcher de arquivos em tempo real**: se o agente cria/edita arquivos, a árvore atualiza sozinha (SSE)
-- **Ações rápidas "Analisar" e "Corrigir"**: um clique envia o caminho do arquivo para o chat do agente
+- **Ações rápidas "Analisar" e "Corrigir"**: um clique pede ao agente para analisar o arquivo, apresentar relatório/diagnóstico e **perguntar antes de aplicar qualquer melhoria ou correção**
 
 ### 🎨 UI integrada à plataforma
 - Painel **encaixado na grade do app** — abre/fecha, **redimensiona o chat**, é **colapsável, redimensionável e móvel** (esquerda/direita)

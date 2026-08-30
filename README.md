@@ -28,7 +28,7 @@ O painel é **encaixado como uma coluna real da grade do app** — abre/fecha, r
 - ✏️ **Editor Monaco**: números de linha, abas, undo/redo, Ctrl+S com detecção de conflito externo, quebra de linha opcional, arquivos grandes (até 50 MB) e binários tratados
 - 🎨 **Coloração TextMate real do VS Code** para 28 linguagens + temas Dark+/Light+ que seguem o tema da GUI
 - 🔄 **Watcher em tempo real** (SSE): a árvore atualiza quando o agente cria/edita arquivos
-- ⚡ **Ações rápidas**: "Analisar" / "Corrigir" enviam o caminho do arquivo para o chat do agente
+- ⚡ **Ações rápidas**: "Analisar" / "Corrigir" enviam ao agente uma instrução para analisar o arquivo, apresentar relatório/diagnóstico e **pedir confirmação antes de modificar** (nada é alterado sem aprovação)
 - 🌐 **Multilíngue**: pt / en / zh, seguindo o locale da GUI
 - 🛡️ **Segurança**: toda operação confinada ao workspace da sessão (sandbox); proteção contra path traversal e symlink escapes; raiz validada no servidor
 
@@ -171,7 +171,7 @@ A reconciliação retira o pacote da lista `dsh.profile.bundles` automaticamente
 | Novo arquivo/pasta, duplicar, renomear, mover, excluir | Ações no hover do item da árvore |
 | Salvar | `Ctrl+S` (com detecção de conflito externo) |
 | Fechar aba | `×` na aba, middle-click ou `Ctrl+W` |
-| Enviar arquivo para o agente | Botões **Analisar** / **Corrigir** na barra de status do editor |
+| Analisar / corrigir com o agente | Botões **Analisar** / **Corrigir** na barra de status do editor (o agente analisa, apresenta relatório/diagnóstico e pede confirmação antes de modificar) |
 | Alternar quebra de linha | Botão **Quebra** na barra de status |
 
 ---
