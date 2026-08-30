@@ -144,11 +144,12 @@ scripts/restart-web.sh
 
 1. Abra a GUI do DSH (ex.: http://127.0.0.1:3080).
 2. O painel **File Explorer** deve aparecer na lateral (colapsável/móvel esquerda-direita).
+
+![dsh-explorer-plugin instalado na GUI do DSH — painel File Explorer em uso](docs/dsh-explorer-plugin-installed.png)
+
 3. Com uma sessão ativa, a árvore mostra o workspace; sem sessão, aparece o fluxo "abrir pasta".
 
 ![Plugin instalado na GUI do DSH — painel File Explorer na lateral](docs/dsh-explorer-installed.png)
-
-![dsh-explorer-plugin instalado na GUI do DSH — painel File Explorer em uso](docs/dsh-explorer-plugin-installed.png)
 
 ### Para remover
 
