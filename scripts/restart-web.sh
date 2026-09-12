@@ -1,12 +1,18 @@
 #!/bin/sh
 # Restart the DSH web GUI server so profile plugin changes take effect.
 # Runs detached via `systemd-run --user` (survives the old server being killed).
-# The log path is derived from this script's location; HOME/PATH defaults are
-# for the dsh install user and can be overridden via environment.
+# The log path is derived from this script's location; HOME is resolved from
+# the account database when absent and PATH is a fixed system default.
 set -u
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 LOG="${DSH_WEB_LOG:-$SCRIPT_DIR/.dsh-web.log}"
-export HOME="${HOME:-/home/user}"
+# Resolve HOME from the account database when the environment provides none
+# (systemd-run --user may start with a bare environment). Deliberately no
+# hardcoded username or home path here — this file is public.
+if [ -z "${HOME:-}" ]; then
+  HOME=$(getent passwd "$(id -u)" 2>/dev/null | cut -d: -f6)
+fi
+export HOME
 export PATH=/usr/local/bin:/usr/bin:/bin
 
 echo "=== restart at $(date -Is) ===" >> "$LOG"

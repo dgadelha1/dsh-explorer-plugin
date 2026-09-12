@@ -7,11 +7,13 @@ node_modules/
 # runtime / test leftovers
 *.log
 .dshtest/
-.ff-profile/
 .syntax-test.png
 
-# editor / local tooling — never commit secrets here (API keys end up in these)
+# local tooling and private workspace data — never commit
 .vscode/
+.gh-bin/
+reasonix.toml
+.ff-profile/
 
 # OS
 .DS_Store
