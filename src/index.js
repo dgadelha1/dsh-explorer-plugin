@@ -58,9 +58,13 @@ const MAX_SSE_CONNECTIONS = 64;
  * requests to prevent DNS rebinding and LAN exposure.
  */
 function isTrustedRequest(req) {
-  const host = req.headers.host ?? '';
-  const origin = req.headers.origin ?? '';
-  const secFetchSite = req.headers['sec-fetch-site'] ?? '';
+  // Fail closed on a malformed request: with no headers bag the Host is
+  // unknown, so the parse below rejects with 403 instead of a TypeError
+  // escaping into the HTTP handler.
+  const headers = req.headers ?? {};
+  const host = headers.host ?? '';
+  const origin = headers.origin ?? '';
+  const secFetchSite = headers['sec-fetch-site'] ?? '';
   // Parse the Host header to get hostname.
   let hostname;
   try {

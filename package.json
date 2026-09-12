@@ -46,7 +46,7 @@
     "vendor": "node scripts/vendor.mjs",
     "sync": "node scripts/sync.mjs",
     "check": "node scripts/sync.mjs --check",
-    "test": "node scripts/server-test.mjs && node scripts/smoke-client.cjs",
+    "test": "node scripts/test.mjs",
     "prepack": "node scripts/sync.mjs"
   }
 }

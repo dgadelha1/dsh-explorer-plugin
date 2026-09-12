@@ -37,14 +37,25 @@ const ctx = {
 
 let rpcHandler = null;
 let eventsHandler = null;
+let staticHandler = null;
 const registrations = [];
 const capturingCtx = {
   get: ctx.get.bind(ctx),
   connection: { rpc: { handle: (_ch, h) => { rpcHandler = h; return () => {}; } } },
-  webServer: { register: (route) => { registrations.push(route); if (route.path === '/explorer/events') eventsHandler = route.handler; return () => {}; } },
+  webServer: {
+    register: (route) => {
+      registrations.push(route);
+      if (route.path === '/explorer/events') eventsHandler = route.handler;
+      if (route.path === '/explorer-assets') staticHandler = route.handler;
+      return () => {};
+    },
+  },
 };
 const dispose = mod.apply(capturingCtx);
-check('plugin registers rpc + 2 web routes', rpcHandler !== null && eventsHandler !== null && registrations.length === 2);
+check(
+  'plugin registers rpc + 2 web routes',
+  rpcHandler !== null && eventsHandler !== null && staticHandler !== null && registrations.length === 2,
+);
 
 const call = async (endpoint, payload) => {
   const r = await rpcHandler(endpoint, payload);
@@ -176,17 +187,95 @@ for (const bad of ['__proto__', 'constructor', 'hasOwnProperty']) {
   check(`endpoint ${bad} -> bad-request`, r.ok === false && r.error.code === 'bad-request', JSON.stringify(r));
 }
 
+// ── HTTP trust fence (DNS rebinding / cross-site) on both routes ──
+// Both the asset route and the SSE route gate on isTrustedRequest. Until now
+// the only exercise of that gate was a mock that omitted `headers` entirely,
+// so the handler threw a TypeError instead of answering. A missing headers bag
+// must fail closed with 403, and every non-loopback or cross-site request must
+// be refused before the handler touches the filesystem.
+
+function makeReq(url, headers) {
+  const req = {
+    url,
+    handlers: {},
+    on(event, fn) { (this.handlers[event] ??= []).push(fn); },
+    emit(event) { for (const fn of this.handlers[event] ?? []) fn(); },
+  };
+  if (headers !== undefined) req.headers = headers;
+  return req;
+}
+
+function makeRes() {
+  return {
+    head: null,
+    body: '',
+    writeHead(code, h) { this.head = { code, h }; },
+    write(chunk) { this.body += chunk ?? ''; },
+    end(chunk) { this.body += chunk ?? ''; },
+  };
+}
+
+/** Run an HTTP handler and report the status it wrote. */
+async function statusFor(handler, url, headers) {
+  const req = makeReq(url, headers);
+  const res = makeRes();
+  await handler(req, res);
+  return { code: res.head?.code ?? null, req, res };
+}
+
+const LOOPBACK_HOST = '127.0.0.1:3080';
+const SSE_URL = '/explorer/events?root=' + encodeURIComponent(allowed);
+// [label, headers, trusted] — `undefined` headers means no headers bag at all.
+const TRUST_CASES = [
+  ['loopback Host', { host: LOOPBACK_HOST }, true],
+  ['localhost Host', { host: 'localhost:3080' }, true],
+  ['IPv6 loopback Host', { host: '[::1]:3080' }, true],
+  ['same-origin Origin', { host: LOOPBACK_HOST, origin: 'http://' + LOOPBACK_HOST }, true],
+  ['LAN Host', { host: '192.168.1.10:3080' }, false],
+  ['DNS-rebinding Host', { host: 'evil.com' }, false],
+  ['cross-site Sec-Fetch-Site', { host: LOOPBACK_HOST, 'sec-fetch-site': 'cross-site' }, false],
+  ['foreign Origin', { host: LOOPBACK_HOST, origin: 'http://evil.com' }, false],
+  ['Origin port mismatch', { host: LOOPBACK_HOST, origin: 'http://127.0.0.1:9999' }, false],
+  ['malformed Host', { host: 'not a host' }, false],
+  ['missing headers bag', undefined, false],
+];
+
+for (const [label, headers, trusted] of TRUST_CASES) {
+  for (const [route, handler, url, accepted] of [
+    ['SSE', eventsHandler, SSE_URL, 200],
+    ['asset', staticHandler, '/explorer-assets', 302],
+  ]) {
+    const want = trusted ? accepted : 403;
+    let out = null;
+    let threw = null;
+    try {
+      out = await statusFor(handler, url, headers);
+    } catch (error) {
+      threw = error;
+    }
+    check(
+      `${route} trust: ${label} -> ${want}`,
+      threw === null && out.code === want,
+      threw !== null ? `threw ${threw.message}` : `got ${out.code}`,
+    );
+    // A trusted SSE request opens a live client + heartbeat; close it so the
+    // deletion test below is not racing leaked watchers.
+    if (threw === null) out.req.emit('close');
+  }
+}
+
+// ── asset route: real file served, traversal refused ──
+r = await statusFor(staticHandler, '/explorer-assets/monaco/vs/loader.js', { host: LOOPBACK_HOST });
+check('asset route serves a vendored file', r.code === 200, `got ${r.code}`);
+r = await statusFor(staticHandler, '/explorer-assets/%2e%2e/%2e%2e/etc/passwd', { host: LOOPBACK_HOST });
+check('asset route encoded traversal -> 403', r.code === 403, `got ${r.code}`);
+
 // ── watcher error: deleting the watched dir must NOT crash the process ──
 // The client always subscribes with the exact workspace root (never a
 // subdirectory), and the allowlist is exact-match, so watch `allowed` itself.
 const watchDir = allowed;
-const sseReq = { url: '/explorer/events?root=' + encodeURIComponent(watchDir), on: () => {} };
-const sseRes = {
-  head: null, body: '',
-  writeHead(code, h) { this.head = { code, h }; },
-  write(chunk) { this.body += chunk; },
-  end() {},
-};
+const sseReq = makeReq('/explorer/events?root=' + encodeURIComponent(watchDir), { host: LOOPBACK_HOST });
+const sseRes = makeRes();
 await eventsHandler(sseReq, sseRes, ctx);
 check('SSE handler accepts allowed root', sseRes.head !== null && sseRes.head.code === 200, JSON.stringify(sseRes.head));
 rmSync(watchDir, { recursive: true, force: true });
