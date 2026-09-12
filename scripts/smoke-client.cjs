@@ -2,13 +2,13 @@
 // All paths are derived from this file's location, so the test works from any
 // checkout (no hardcoded machine-specific paths).
 const path = require('path');
+const { loadModule } = require('./lib/toolchain.cjs');
 const ws = path.resolve(__dirname, '..');
 global.window = { __ModuleLoader__: { load: (handoff) => { global.__loaded = handoff; } } };
 global.document = undefined;
 global.localStorage = { getItem: () => null, setItem: () => {} };
 global.navigator = { languages: ['en'] };
-const reactPath = path.join(ws, '.pnpm-home/node_modules/react');
-const React = require(reactPath);
+const React = loadModule('react');
 global.require = (name) => {
   if (name === 'react') return React;
   throw new Error('unexpected require: ' + name);

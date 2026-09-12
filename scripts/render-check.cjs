@@ -7,15 +7,17 @@
 //      the title bar adds height by design, so only width is asserted)
 //   - no horizontal overflow at 1280px
 // All paths are derived from this file's location, so it works from any
-// checkout (same pattern as syntax-test-driver.cjs).
+// checkout (same pattern as syntax-test-driver.cjs). The Firefox binary is
+// auto-discovered; override with FIREFOX_PATH=/path/to/firefox if needed.
 const path = require('path');
 const ws = path.resolve(__dirname, '..');
-const puppeteer = require(path.join(ws, '.pnpm-home/node_modules/puppeteer-core'));
+const { loadModule, resolveFirefox } = require('./lib/toolchain.cjs');
+const puppeteer = loadModule('puppeteer-core');
 
 (async () => {
   const browser = await puppeteer.launch({
     browser: 'firefox',
-    executablePath: '/usr/bin/firefox',
+    executablePath: resolveFirefox(),
     headless: true,
     args: ['--no-sandbox', '-profile', path.join(ws, '.ff-profile')],
   });

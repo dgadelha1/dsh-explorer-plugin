@@ -1,14 +1,16 @@
 // Drive the real Firefox (headless) against the live server's syntax test page.
 // All paths are derived from this file's location, so the test works from any
-// checkout (no hardcoded machine-specific paths).
+// checkout. The Firefox binary is auto-discovered (PATH, then well-known
+// locations); override with FIREFOX_PATH=/path/to/firefox if needed.
 const path = require('path');
 const ws = path.resolve(__dirname, '..');
-const puppeteer = require(path.join(ws, '.pnpm-home/node_modules/puppeteer-core'));
+const { loadModule, resolveFirefox } = require('./lib/toolchain.cjs');
+const puppeteer = loadModule('puppeteer-core');
 
 (async () => {
   const browser = await puppeteer.launch({
     browser: 'firefox',
-    executablePath: '/usr/bin/firefox',
+    executablePath: resolveFirefox(),
     headless: true,
     args: ['--no-sandbox', '-profile', path.join(ws, '.ff-profile')],
   });

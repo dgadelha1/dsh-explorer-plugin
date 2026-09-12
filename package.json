@@ -48,5 +48,9 @@
     "check": "node scripts/sync.mjs --check",
     "test": "node scripts/test.mjs",
     "prepack": "node scripts/sync.mjs"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^23.11.1",
+    "react": "^18.3.1"
   }
 }

@@ -1,6 +1,7 @@
 # toolchain / install artifacts (regenerable)
 node_modules/
 .pnpm-home/
+.pnpm-store/
 .npm-cache/
 .bin/
 
