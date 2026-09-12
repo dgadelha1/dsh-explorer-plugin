@@ -10,7 +10,7 @@ node_modules/
 .dshtest/
 .syntax-test.png
 
-# local tooling and private workspace data — never commit
+# local tooling and editor state — never commit
 .vscode/
 .gh-bin/
 reasonix.toml
