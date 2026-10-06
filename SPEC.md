@@ -39,8 +39,8 @@ dsh-explorer-plugin/
 │   ├── vendor.mjs          # baixa os assets para vendor/ (idempotente; versões pinadas)
 │   ├── merge-themes.mjs    # JSONC -> JSON estrito + merge da cadeia include dos temas
 │   ├── sync.mjs            # copia src/ -> lib/ (--check falha se divergirem; roda no prepack)
-│   ├── server-test.mjs     # teste de regressão do servidor (sandbox/allowlist, caps, watcher sem crash)
-│   ├── smoke-client.cjs    # smoke test do bundle (loader stub em Node)
+│   ├── server-test.mjs     # teste de regressão do servidor (sandbox/allowlist, caps, MIME, watcher sem crash)
+│   ├── smoke-client.cjs    # smoke test do bundle: loader stub + apply + 1º render (dispatcher de hooks)
 │   └── syntax-test-driver.cjs  # teste headless do pipeline TextMate (puppeteer + Firefox)
 └── vendor/                 # assets servidos em runtime (commitados no repo)
     ├── monaco/             # monaco-editor (build AMD min; source maps removidos)
@@ -71,9 +71,10 @@ dsh-explorer-plugin/
     "client": {
       "platform": "web",
       "inject": [
-        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-modules",
         "@deepseek-ai/dsh-client-connection",
         "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-slots",
         "@deepseek-ai/dsh-client-ui-theme",
         "@deepseek-ai/dsh-client-locale"
       ]
@@ -96,7 +97,7 @@ O plugin servidor exporta `{ name: 'explorer', inject: ['webServer', 'connection
 
 ### 3.1 Canal RPC `/explorer`
 
-Registrado com `ctx.connection.rpc.handle('/explorer', handler, { authority: 'loopback' })`.
+Registrado com `ctx.connection.rpc.handle('/explorer', handler)` — em releases do dsh em que o serviço `connection` não enxerga `webServer` a partir do próprio fiber (0.1.5-rc.3, onde o `handle` documentado lança `cannot get property "webServer" without inject`), o plugin cai no registry do serviço: `connection.register(ctx, '/explorer', handler)`, com o ctx do plugin como dono — mesma rota de prefixo, mesma fence, mesma ponte HTTP/envelope. O antigo `{ authority: 'loopback' }` não existe mais: a fence da plataforma exige Host loopback + same-origin **e** cookie de sessão do browser (401 sem ele).
 > O canal **não pode conter `/` interno** (`CHANNEL_PATTERN = /^\/[A-Za-z0-9._~-]+$/`) — por isso `/explorer` e não `/rpc/explorer`.
 
 Handler `(endpoint, payload, signal) → RpcResult`. O cliente chama `ctx.connection.rpc.call('/explorer', endpoint, payload)` → `POST /explorer/<endpoint>`.
@@ -121,9 +122,11 @@ Regras:
 - **A raiz do workspace é intocável por rename/move/delete** (`.`, `''` → `bad-request`).
 - **Somente arquivos regulares são lidos**: `fs/read`/`fs/readLarge` rejeitam FIFO/socket/device (`isFile()`), evitando que `readFile` trave o handler (DoS).
 - **Listagens não vazam metadados**: symlinks que resolvem para fora da raiz são ocultados do `fs/list` (realpath + confine por entrada).
-- **Root validado no servidor (não confiado ao cliente)**: o `root` enviado pelo cliente precisa ser o cwd canônico de uma sessão viva ou um path do workspace registry — caso contrário `bad-request`/`403`. Isso impede ler/gravar diretórios arbitrários (`/`, `/etc`, `~`) pela API loopback. O canal RPC já é protegido contra CSRF pela plataforma (`isTrustedApiRequest`: Host loopback + Origin/same-site).
+- **Root validado no servidor (não confiado ao cliente)**: o `root` enviado pelo cliente precisa ser o cwd canônico de uma sessão viva ou um path do workspace registry — caso contrário `bad-request`/`403`. Isso impede ler/gravar diretórios arbitrários (`/`, `/etc`, `~`) pela API loopback. O canal RPC é protegido pela fence da plataforma (`isTrustedApiRequest`: Host loopback + Origin/same-site, mais o cookie de sessão do browser).
 - `root` validado como diretório existente a cada chamada.
-- Códigos de erro apenas do schema RPC compartilhado (`bad-request`, `directory-exists`, `directory-unreadable`, `internal`) — o schema do cliente rejeita códigos desconhecidos. Dispatch de endpoints via `hasOwnProperty` (`__proto__`/`constructor` → `bad-request`).
+- **Códigos de erro apenas do schema RPC compartilhado** (`bad-request`, `directory-exists`, `directory-unreadable`, `internal`) — o schema do cliente rejeita códigos desconhecidos. Os `catch` dos endpoints de mutação **re-lançam um `FsError` já tipado** em vez de re-embrulhar tudo como `internal`: sem isso, uma rejeição de confinamento (`bad-request`) apareceria como falha de I/O comum. Dispatch de endpoints via `hasOwnProperty` (`__proto__`/`constructor` → `bad-request`).
+- **Ocultos por padrão também no servidor**: `includeHidden` omitido é tratado como `false` (o cliente faz opt-in pelo toggle do cabeçalho) — o default do servidor e o da UI são o mesmo.
+- MIME das rotas estáticas é resolvido pela **extensão do basename**, e somente quando o basename tem ponto: `lastIndexOf('.')` sobre o caminho inteiro devolve `-1` para nomes sem extensão e `slice(-1)` entregaria o último caractere do caminho à tabela de MIME.
 - Binário detectado por byte NUL nos primeiros 8 KB.
 
 ### 3.2 Rotas web (webServer)
@@ -147,13 +150,21 @@ Regras:
 - Bundle no formato `window.__ModuleLoader__.load({id:'dsh-explorer-plugin', factory})`, exportando `apply` + `inject`.
 - `inject` (serviços): `['slots','layout','connection','sessions','workspaces','locale','theme']`.
 - `apply(ctx)`: registra dicionários `explorer` (pt/en/zh) e o componente `ExplorerPanel` no slot `shell.overlay` (list, root) do `ui-layout`.
-- Dependências de runtime do bundle: apenas `react` (via `require`); todo o resto via serviços do `ctx`. CSS injetado via `<style>` (reivindicado pelo `claimStyles`).
-- **Cores 100% do tema**: todo o CSS usa tokens do design-system do DSH (`--dsw-*` — textos, bordas, fundos, hover, diálogos, shadows) e `color-mix()` para sobreposições translúcidas; **nenhum hex/rgb é hardcoded**. A barra de status usa a cor de destaque (`--dsw-alias-state-business-primary`); pastas/ponto de não-salvo usam o âmbar do tema (`--dsw-alias-state-warn-*`); erros usam `--dsw-alias-state-error-*`. O painel segue claro/escuro automaticamente via `body[data-ds-dark-theme]` do app.
+- **Texto traduzido sem depender do assento `t`**: o registro declara `locale: 'explorer'` (o mesmo padrão dos plugins nativos, ex. `settings.section` do `agent-presets`), mas os props padrão do `shell.overlay` não incluem `t` — o componente resolve o tradutor em cascata: `props.t` → `ctx.locale.bind('explorer')` → dicionário interno (`en`, depois `pt`). Assim uma mudança de contrato do host degrada para texto legível em vez de derrubar a entrada do slot (que é o que acontece quando um componente lança: `slot entry crashed in '<slot>'`).
+- Dependências de runtime do bundle: apenas `react` (via `require`); todo o resto via serviços do `ctx`. O CSS é injetado como um `<style data-plugin="dsh-explorer-plugin">` reivindicado por `ctx.effect` (idempotente e **descartado no unload** — a reivindicação vive em um `WeakSet`, então uma segunda chamada devolve um disposer funcional em vez de vazar a folha de estilo).
+- **Cores 100% do tema**: todo o CSS usa tokens do design-system do DSH (`--dsw-*` — textos, bordas, fundos, hover, diálogos, shadows) e `color-mix()` para sobreposições translúcidas; **nenhum hex/rgb é hardcoded**. Todo nome de token é validado contra o conjunto vivo do DSH instalado (`cordis_inspect_query` `Theme` + a tabela de tokens do próprio bundle); a barra de status usa a cor de destaque (`--dsw-alias-state-business-primary`), pastas/ponto de não-salvo usam o âmbar do tema (`--dsw-alias-state-warn-*`), erros usam `--dsw-alias-state-error-*`. O painel segue claro/escuro automaticamente pelas marcações de tema do app.
 - Assets de runtime carregados por script clássico/fetch de `/explorer-assets` (monaco AMD via `loader.js` + `require.config({paths:{vs}})`; onig/textmate como UMD clássicos → `window.onig` / `window.vscodetextmate`; onig.wasm via `loadWASM({data})`).
 
 ### 4.2 Painel: encaixado na grade (redimensiona o chat)
 
-- O painel é renderizado no `shell.overlay` do AppFrame, mas **participa do layout**: um efeito lê o `grid-template-columns` inline do AppFrame (localizado via `[data-shell-overlay]`), **insere a largura do painel como coluna** (lado esquerdo → após a sidebar do DSH; lado direito → no fim) e mantém a sincronização com as mudanças do app via `MutationObserver` (guard contra loop próprio por `lastSet`).
+- O painel é renderizado no `shell.overlay` do AppFrame, mas **participa do layout**: um efeito lê o `grid-template-columns` inline do AppFrame (localizado via `[data-shell-overlay]`), **insere a largura do painel como coluna** (lado esquerdo → após a sidebar do DSH; lado direito → no fim) e mantém a sincronização com as mudanças do app via `MutationObserver` (guard contra loop próprio comparando o template resultante, não a string lida).
+- **As colunas deslocadas pela inserção são fixadas por `grid-column`**: o AppFrame posiciona suas colunas por **auto-placement** (sidebar → track 1, chat → track 2, rightbar → track 3), então só inserir uma track deslocaria o chat para dentro da track fixa do painel — o painel o cobriria por completo (o bug "explorer por cima do chat" visto no app Desktop 0.2.0-rc.2). Pinamos **apenas as colunas após o ponto de inserção** (esquerda: chat→3, rightbar→4; a sidebar fica no placement natural; direita: nenhum pin, append no fim). Os pins são inline, idempotentes e limpos no teardown; o React não gerencia `grid-column` nesses elementos, então não há conflito.
+- **As colunas do app são re-escaneadas a cada apply** e o observer também observa `childList`: se o React substituir o nó de uma coluna com o painel aberto, o pin fica no nó antigo — o re-scan re-pin o nó novo no mesmo ciclo.
+- **A track própria é detectada pelo valor exato** (`state.width + "px"` na posição de inserção: índice 1 à esquerda, último token à direita) — o app nunca escreve essa largura ajustada pelo usuário nessas posições, e a detecção sobrevive à re-serialização da CSSOM.
+- **Fail-safe de estrutura**: menos de 2 colunas in-flow ou template indecifrável → a grade **não é tocada** (o painel flutua na borda em vez de deslocar o chat para a track errada) e qualquer track residual nossa é desfeita.
+- **O frame nunca rola**: o app estaciona o painel da sua sidebar direita fora da tela (passa da borda direita do frame), o que deixa o frame `overflow:hidden` com overflow rolável — um scroll desregrado (foco, roda, tooling) deslocava o shell inteiro, incluindo o nosso alinhamento (visto ao vivo: `scrollLeft=256`). O efeito zera `frame.scrollLeft` no mount e num listener de `scroll`.
+- **Convivência com a sidebar direita do app**: quando o app abre a sua sidebar direita (`data-rightbar-collapsed` ausente), o painel **sai do caminho automaticamente** para o lado esquerdo — uma vez por "episódio" de sidebar aberta (um flip manual de volta enquanto ela está aberta é respeitado). Degradation conhecida, sem cooperação do app: com a sidebar direita do app aberta, o chat cai ao mínimo do app (400px) e a sidebar do app pode ficar parcialmente clipada — resolve-la exige um contrato upstream (slot de coluna negociável).
+- O painel respeita `--dsh-frame-overlay-top` (contrato do app para conteúdo de overlay sob a titlebar no Desktop; fallback `0px` na web).
 - O painel é `position:absolute` dentro do frame, alinhado à coluna inserida. Resultado: abrir o painel **encolhe o chat** (com a transição da grade do app).
 - **Colapsável** (estado persistido em `localStorage` `dsh-explorer.prefs`); minimizado vira uma **pílula fina na borda da tela, altura média** (não sobrepõe session log / status bar).
 - **Redimensionável**: grip na borda do painel (drag 1:1, transição da grade desativada durante o arrasto, 260–560 px) + **divisor vertical** árvore/editor (20–70%, persistido).
@@ -197,9 +208,12 @@ Regras:
 1. pnpm não está no PATH do sistema: usar o **shim local** (`.bin/pnpm` → `node <workspace>/.pnpm-home/node_modules/pnpm/bin/pnpm.cjs`); o cache npm/pnpm fica **dentro do workspace** (`.npm-cache`) porque `~/.npm` está em montagem read-only.
 2. `node scripts/vendor.mjs` (baixa monaco, oniguruma, textmate, grammars, temas, codicon, seti — rede necessária).
 3. `PATH="$PWD/.bin:$PATH" dsh plugin --profile web add -w /caminho/absoluto` (a flag `-w` é exigida porque o profile é um pnpm workspace root).
-4. **Reiniciar `dsh web`** (a varredura de client plugins e a composição do loader ocorrem no boot). Mudanças apenas no **cliente** (`lib/client.js`, `vendor/`) são servidas ao vivo com `no-cache` — basta atualizar a página.
+4. **Reiniciar o servidor que serve a GUI** (a varredura de client plugins e a composição do loader ocorrem no boot). No profile `web` isso é reiniciar o `dsh web`; no profile `desktop` (app Electron) o boot é exclusivo do app — `dsh web --profile desktop` é recusado (`profile "desktop" is managed exclusively by the Electron application`), então **reinicie o app**. Mudanças apenas no **cliente** (`lib/client.js`, `vendor/`, `src/` sincronizado) são servidas ao vivo com `no-cache` — basta atualizar a página.
+5. **Validação de integração (0.2.0-rc.2):** com o plugin instalado, o boot registra a linha e o cliente compõe a entrada `dsh-explorer-plugin` no `__DSH_BOOT__`; as rotas `/explorer-assets/*` respondem 200 com o MIME correto, `/explorer/events?root=<fora da allowlist>` responde 403 e `/plugins/??dsh-explorer-plugin/client.js` entrega o bundle. O painel em si precisa de conferência visual no navegador (sem controle de browser no ambiente de verificação).
 
 ## 6. Critérios de aceite (verificados)
+
+> Verificação automatizada: `npm test` = `scripts/server-test.mjs` (72 asserções: confinamento/allowlist, caps, MIME das rotas estáticas, defaults de listagem, watcher, e a fence de confiança HTTP — Host/Origin/Sec-Fetch-Site em ambas as rotas) + `scripts/smoke-client.cjs` (23 asserções: contrato do loader, claims do `apply`, CSS descartável, 1º render com e sem assento de locale, e regressão do encaixe — track inserida, pins mínimos das colunas deslocadas, re-sync pós-rewrite do app, re-pin de nó substituído pelo React, teardown restaurando a grade, fail-safe de estrutura desconhecida e zeração do scroll desregrado do frame). No Windows os casos de symlink usam **junction** (`mklink /J`), então a cobertura de escape roda sem privilégio; só FIFO fica de fora.
 
 - [x] Painel abre/fecha, move esquerda/direita, redimensiona (borda + divisor); estado persiste.
 - [x] Abrir o painel **redimensiona o chat** (coluna na grade).

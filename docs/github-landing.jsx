@@ -9,7 +9,7 @@ export default function LandingPage() {
         <div className="flex items-center space-x-3">
           <span className="font-mono font-bold text-lg text-white">dsh-explorer-plugin</span>
           {/* TODO: keep this badge in sync with package.json version */}
-          <span className="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full border border-slate-700">v0.2.0 · MIT</span>
+          <span className="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full border border-slate-700">v0.2.1 · MIT</span>
         </div>
         <a href="https://github.com/dgadelha1/dsh-explorer-plugin" target="_blank" rel="noreferrer" 
            className="flex items-center gap-2 text-sm bg-slate-900 hover:bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-md transition-all">

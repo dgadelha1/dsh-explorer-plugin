@@ -1,6 +1,6 @@
 {
   "name": "dsh-explorer-plugin",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "DSH File Explorer: workspace file tree + Monaco editor with real VS Code TextMate grammars, in the DSH Web GUI",
   "type": "module",
   "main": "lib/index.js",
@@ -34,9 +34,10 @@
     "client": {
       "platform": "web",
       "inject": [
-        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-modules",
         "@deepseek-ai/dsh-client-connection",
         "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-slots",
         "@deepseek-ai/dsh-client-ui-theme",
         "@deepseek-ai/dsh-client-locale"
       ]

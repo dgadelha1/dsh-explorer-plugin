@@ -9,12 +9,16 @@ node_modules/
 *.log
 .dshtest/
 .syntax-test.png
+.ff-profile/
+
+# local DSH profile backups taken before installing into a profile
+.profile-backups/
 
 # local tooling and editor state — never commit
 .vscode/
+.reasonix/
 .gh-bin/
 reasonix.toml
-.ff-profile/
 
 # OS
 .DS_Store

@@ -1,10 +1,11 @@
 // Integration-style test of the server half (lib/index.js) with a mocked
 // Cordis ctx: sandbox allowlist, path confinement, write/read roundtrip,
 // size caps, and the fs.watch error handler (no process crash).
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
+import { execFileSync } from 'node:child_process';
 
 const require = createRequire(import.meta.url);
 const mod = await import('../lib/index.js');
@@ -20,6 +21,46 @@ let failures = 0;
 function check(name, cond, extra = '') {
   if (cond) console.log('ok   ' + name);
   else { failures++; console.log('FAIL ' + name + (extra ? ' :: ' + extra : '')); }
+}
+
+// Symlinks and FIFOs need capabilities a plain Windows account lacks (`EPERM` on
+// symlink, no `mkfifo`). Those checks are reported as skips there instead of
+// failing the run, so the suite stays meaningful on both platforms; every
+// assertion that does run still counts as a failure when it fails.
+let skips = 0;
+function skip(names, why) {
+  for (const name of Array.isArray(names) ? names : [names]) {
+    skips++;
+    console.log('skip ' + name + ' :: ' + why);
+  }
+}
+
+/**
+ * Create one symlink; false (plus the recorded reason) when unsupported here.
+ * Windows denies `symlinkSync` to unprivileged accounts (EPERM), so fall back
+ * to a directory junction, which is a real reparse-point symlink for the
+ * purpose of the confinement checks and needs no special capability. File
+ * targets have no junction equivalent, so those cases still skip there.
+ */
+let symlinkUnavailable = '';
+let symlinkKind = 'symlink';
+function makeSymlink(target, path) {
+  try {
+    symlinkSync(target, path);
+    return true;
+  } catch (error) {
+    if (process.platform === 'win32') {
+      try {
+        execFileSync('cmd', ['/c', 'mklink', '/J', path, target], { stdio: 'ignore' });
+        symlinkKind = 'junction';
+        return true;
+      } catch {
+        /* fall through to the recorded skip reason */
+      }
+    }
+    symlinkUnavailable ||= 'symlinks unavailable: ' + error.message;
+    return false;
+  }
 }
 
 // ── mock ctx ──
@@ -57,6 +98,61 @@ check(
   rpcHandler !== null && eventsHandler !== null && staticHandler !== null && registrations.length === 2,
 );
 
+// ── RPC channel registration: documented call first, channel-registry fallback ──
+// Current dsh resolves `webServer` from the connection plugin's own fiber, so
+// `rpc.handle` throws at boot for a sibling plugin row; the plugin must then
+// register on the service's channel registry with its own ctx as owner.
+const injectError = new Error('cannot get property "webServer" without inject');
+let fallbackHandler = null;
+let fallbackOwner = null;
+let fallbackChannel = null;
+const fallbackRegistrations = [];
+const fallbackCtx = {
+  get: ctx.get.bind(ctx),
+  connection: {
+    rpc: { handle: () => { throw injectError; } },
+    register(owner, channel, handler) {
+      fallbackOwner = owner;
+      fallbackChannel = channel;
+      fallbackHandler = handler;
+      return () => {};
+    },
+  },
+  webServer: { register: (route) => { fallbackRegistrations.push(route); return () => {}; } },
+};
+const disposeFallback = mod.apply(fallbackCtx);
+check('rpc.handle "without inject" falls back to the channel registry',
+  fallbackHandler !== null && fallbackOwner === fallbackCtx && fallbackChannel === '/explorer' && fallbackRegistrations.length === 2);
+const viaFallback = fallbackHandler === null ? { ok: false, error: { code: 'no-handler' } } : await fallbackHandler('fs/list', { root: allowed, path: '.', includeHidden: true });
+check('fallback channel dispatches endpoints', viaFallback.ok === true && viaFallback.value.entries.some((e) => e.name === 'hello.txt'), JSON.stringify(viaFallback));
+
+// An unrelated registration failure must not be swallowed.
+const unrelated = new Error('client-connection: channel already registered');
+let rethrown = null;
+try {
+  mod.apply({
+    get: ctx.get.bind(ctx),
+    connection: { rpc: { handle: () => { throw unrelated; } }, register: () => () => {} },
+    webServer: { register: () => () => {} },
+  });
+} catch (error) {
+  rethrown = error;
+}
+check('unrelated rpc.handle failures are rethrown', rethrown === unrelated, String(rethrown && rethrown.message));
+
+// Without the registry method the documented failure is rethrown as-is.
+let propagated = null;
+try {
+  mod.apply({
+    get: ctx.get.bind(ctx),
+    connection: { rpc: { handle: () => { throw injectError; } } },
+    webServer: { register: () => () => {} },
+  });
+} catch (error) {
+  propagated = error;
+}
+check('missing registry method rethrows the inject failure', propagated === injectError, String(propagated && propagated.message));
+
 const call = async (endpoint, payload) => {
   const r = await rpcHandler(endpoint, payload);
   return r;
@@ -85,13 +181,11 @@ check('encoded traversal rejected', r.ok === false && r.error.code === 'bad-requ
 // ── symlink escape ──
 const outside = join(wsRoot, 'outside.txt');
 writeFileSync(outside, 'top secret');
-const { symlinkSync } = require('node:fs');
-try {
-  symlinkSync(outside, join(allowed, 'link-out'));
+if (makeSymlink(outside, join(allowed, 'link-out'))) {
   r = await call('fs/read', { root: allowed, path: 'link-out' });
   check('symlink escape rejected', r.ok === false && r.error.code === 'bad-request', JSON.stringify(r));
-} catch (e) {
-  check('symlink escape rejected', false, 'symlink setup failed: ' + e.message);
+} else {
+  skip('symlink escape rejected', symlinkUnavailable);
 }
 
 // ── write/read roundtrip (atomic) ──
@@ -142,43 +236,68 @@ r = await call('fs/delete', { root: allowed, path: '.' });
 check('fs/delete of the root rejected', r.ok === false && r.error.code === 'bad-request', JSON.stringify(r));
 
 // ── symlink workspace root: normal ops work, root guards still hold ──
-const { symlinkSync: makeSymlink } = require('node:fs');
 const linkRoot = join(wsRoot, 'linkroot');
-makeSymlink(allowed, linkRoot);
-r = await call('fs/list', { root: linkRoot, path: '.', includeHidden: true });
-check('fs/list works through a symlink root', r.ok === true && r.value.entries.some((e) => e.name === 'hello.txt'), JSON.stringify(r));
-r = await call('fs/read', { root: linkRoot, path: 'hello.txt' });
-check('fs/read works through a symlink root', r.ok === true && r.value.content.includes('hello'), JSON.stringify(r));
-r = await call('fs/delete', { root: linkRoot, path: '.' });
-check('fs/delete of symlink root rejected', r.ok === false && r.error.code === 'bad-request', JSON.stringify(r));
-r = await call('fs/rename', { root: linkRoot, path: '.', newName: 'x' });
-check('fs/rename of symlink root rejected', r.ok === false && r.error.code === 'bad-request', JSON.stringify(r));
+if (makeSymlink(allowed, linkRoot)) {
+  r = await call('fs/list', { root: linkRoot, path: '.', includeHidden: true });
+  check('fs/list works through a symlink root', r.ok === true && r.value.entries.some((e) => e.name === 'hello.txt'), JSON.stringify(r));
+  r = await call('fs/read', { root: linkRoot, path: 'hello.txt' });
+  check('fs/read works through a symlink root', r.ok === true && r.value.content.includes('hello'), JSON.stringify(r));
+  r = await call('fs/delete', { root: linkRoot, path: '.' });
+  check('fs/delete of symlink root rejected', r.ok === false && r.error.code === 'bad-request', JSON.stringify(r));
+  r = await call('fs/rename', { root: linkRoot, path: '.', newName: 'x' });
+  check('fs/rename of symlink root rejected', r.ok === false && r.error.code === 'bad-request', JSON.stringify(r));
+} else {
+  skip([
+    'fs/list works through a symlink root',
+    'fs/read works through a symlink root',
+    'fs/delete of symlink root rejected',
+    'fs/rename of symlink root rejected',
+  ], symlinkUnavailable);
+}
 
 // ── write through a symlinked directory is confined ──
 const outsideDir = join(wsRoot, 'outside-dir');
 mkdirSync(outsideDir);
-makeSymlink(outsideDir, join(allowed, 'sub-link'));
-r = await call('fs/write', { root: allowed, path: 'sub-link/new.txt', content: 'x' });
-check('fs/write through out-of-root symlink dir rejected', r.ok === false && r.error.code === 'bad-request', JSON.stringify(r));
-r = await call('fs/create', { root: allowed, path: 'sub-link/new2.txt', kind: 'file' });
-check('fs/create through out-of-root symlink dir rejected', r.ok === false && r.error.code === 'bad-request', JSON.stringify(r));
+if (makeSymlink(outsideDir, join(allowed, 'sub-link'))) {
+  r = await call('fs/write', { root: allowed, path: 'sub-link/new.txt', content: 'x' });
+  check('fs/write through out-of-root symlink dir rejected', r.ok === false && r.error.code === 'bad-request', JSON.stringify(r));
+  r = await call('fs/create', { root: allowed, path: 'sub-link/new2.txt', kind: 'file' });
+  check('fs/create through out-of-root symlink dir rejected', r.ok === false && r.error.code === 'bad-request', JSON.stringify(r));
+} else {
+  skip([
+    'fs/write through out-of-root symlink dir rejected',
+    'fs/create through out-of-root symlink dir rejected',
+  ], symlinkUnavailable);
+}
 
 // ── out-of-root symlinks are hidden from listings (no metadata leak) ──
-makeSymlink(outside, join(allowed, 'leaky-link'));
-r = await call('fs/list', { root: allowed, path: '.', includeHidden: true });
-check('out-of-root symlink hidden from fs/list', r.ok === true && !r.value.entries.some((e) => e.name === 'leaky-link'), JSON.stringify(r));
+if (makeSymlink(outside, join(allowed, 'leaky-link'))) {
+  r = await call('fs/list', { root: allowed, path: '.', includeHidden: true });
+  check('out-of-root symlink hidden from fs/list', r.ok === true && !r.value.entries.some((e) => e.name === 'leaky-link'), JSON.stringify(r));
+} else {
+  skip('out-of-root symlink hidden from fs/list', symlinkUnavailable);
+}
 
 // ── FIFO/special files never reach readFile (would hang the handler) ──
 const { execSync } = require('node:child_process');
 const fifo = join(allowed, 'pipe.fifo');
+let fifoReady = false;
 try {
   execSync(`mkfifo "${fifo}"`);
+  fifoReady = existsSync(fifo);
+} catch {
+  fifoReady = false; // Windows and minimal images ship no mkfifo
+}
+if (fifoReady) {
   r = await call('fs/read', { root: allowed, path: 'pipe.fifo' });
   check('fs/read of a FIFO rejected (no hang)', r.ok === false && r.error.code === 'bad-request', JSON.stringify(r));
   r = await call('fs/readLarge', { root: allowed, path: 'pipe.fifo' });
   check('fs/readLarge of a FIFO rejected (no hang)', r.ok === false && r.error.code === 'bad-request', JSON.stringify(r));
-} catch (e) {
-  check('fs/read of a FIFO rejected (no hang)', false, 'mkfifo failed: ' + e.message);
+} else {
+  skip([
+    'fs/read of a FIFO rejected (no hang)',
+    'fs/readLarge of a FIFO rejected (no hang)',
+  ], 'mkfifo unavailable on this platform');
 }
 
 // ── prototype-chain endpoint names are cleanly rejected ──
@@ -270,6 +389,77 @@ check('asset route serves a vendored file', r.code === 200, `got ${r.code}`);
 r = await statusFor(staticHandler, '/explorer-assets/%2e%2e/%2e%2e/etc/passwd', { host: LOOPBACK_HOST });
 check('asset route encoded traversal -> 403', r.code === 403, `got ${r.code}`);
 
+
+// ── fs/list hidden default ──
+// Hidden entries are opt-in: omitting includeHidden must behave exactly like
+// false, and an explicit true must surface dotfiles.
+mkdirSync(join(allowed, 'visible-dir'));
+writeFileSync(join(allowed, '.secret'), 's');
+r = await call('fs/list', { root: allowed, path: '.' });
+check('fs/list omitting includeHidden hides dotfiles',
+  r.ok === true && !r.value.entries.some((e) => e.name === '.secret') && r.value.entries.some((e) => e.name === 'visible-dir'),
+  JSON.stringify(r));
+r = await call('fs/list', { root: allowed, path: '.', includeHidden: false });
+check('fs/list includeHidden:false hides dotfiles', r.ok === true && !r.value.entries.some((e) => e.name === '.secret'), JSON.stringify(r));
+r = await call('fs/list', { root: allowed, path: '.', includeHidden: true });
+check('fs/list includeHidden:true shows dotfiles', r.ok === true && r.value.entries.some((e) => e.name === '.secret'), JSON.stringify(r));
+
+// ── error codes survive the write/rename/move catch wrappers ──
+// A confinement rejection inside those handlers must stay `bad-request`; a
+// blanket `internal` re-wrap would present a sandbox escape attempt as an
+// ordinary I/O failure.
+const xssDir = join(wsRoot, 'xss');
+mkdirSync(xssDir);
+if (makeSymlink(xssDir, join(allowed, 'xss-link'))) {
+  r = await call('fs/write', { root: allowed, path: 'xss-link/planted.txt', content: 'pwn' });
+  check('fs/write escape keeps bad-request (not internal)', r.ok === false && r.error.code === 'bad-request', JSON.stringify(r));
+  r = await call('fs/rename', { root: allowed, path: 'xss-link/planted.txt', newName: 'renamed' });
+  check('fs/rename escape keeps bad-request (not internal)', r.ok === false && r.error.code === 'bad-request', JSON.stringify(r));
+  r = await call('fs/move', { root: allowed, path: 'xss-link/planted.txt', targetDir: '.' });
+  check('fs/move escape keeps bad-request (not internal)', r.ok === false && r.error.code === 'bad-request', JSON.stringify(r));
+  r = await call('fs/create', { root: allowed, path: 'xss-link/created.txt', kind: 'file' });
+  check('fs/create escape keeps bad-request (not internal)', r.ok === false && r.error.code === 'bad-request', JSON.stringify(r));
+} else {
+  skip([
+    'fs/write escape keeps bad-request (not internal)',
+    'fs/rename escape keeps bad-request (not internal)',
+    'fs/move escape keeps bad-request (not internal)',
+    'fs/create escape keeps bad-request (not internal)',
+  ], symlinkUnavailable);
+}
+
+// ── static asset route: MIME by basename, traversal refused ──
+const assetsRoute = registrations.find((route) => route.path === '/explorer-assets');
+check('assets route registered as prefix', assetsRoute !== undefined && assetsRoute.kind === 'prefix');
+if (assetsRoute) {
+  const assetReq = (url) => ({ url, headers: { host: '127.0.0.1:3080' } });
+  const assetRes = () => ({
+    head: null, body: null,
+    writeHead(code, h) { this.head = { code, h }; },
+    end(payload) { this.body = payload; },
+  });
+  let ares = assetRes();
+  await assetsRoute.handler(assetReq('/explorer-assets/monaco/vs/loader.js'), ares);
+  check('asset .js served with JS MIME and nosniff',
+    ares.head && ares.head.code === 200 && ares.head.h['Content-Type'].startsWith('text/javascript') && ares.head.h['X-Content-Type-Options'] === 'nosniff',
+    JSON.stringify(ares.head));
+
+  // Extensionless / missing asset: the old `slice(lastIndexOf('.'))` returned
+  // the last CHARACTER of the path, so this must resolve through the
+  // octet-stream arm rather than a bogus MIME lookup key.
+  ares = assetRes();
+  await assetsRoute.handler(assetReq('/explorer-assets/no-extension-asset'), ares);
+  check('missing asset -> 404', ares.head !== null && ares.head.code === 404, JSON.stringify(ares.head));
+
+  ares = assetRes();
+  await assetsRoute.handler(assetReq('/explorer-assets/..%2f..%2fpackage.json'), ares);
+  check('asset traversal refused', ares.head !== null && ares.head.code === 403, JSON.stringify(ares.head));
+
+  ares = assetRes();
+  await assetsRoute.handler({ url: '/explorer-assets/monaco/vs/loader.js', headers: { host: 'evil.example.com' } }, ares);
+  check('asset route refuses non-loopback Host', ares.head !== null && ares.head.code === 403, JSON.stringify(ares.head));
+}
+
 // ── watcher error: deleting the watched dir must NOT crash the process ──
 // The client always subscribes with the exact workspace root (never a
 // subdirectory), and the allowlist is exact-match, so watch `allowed` itself.
@@ -285,7 +475,10 @@ await new Promise((resolve) => setTimeout(resolve, 700));
 check('watcher error did not crash the process', true);
 
 dispose();
+disposeFallback();
 rmSync(wsRoot, { recursive: true, force: true });
 
-console.log(failures === 0 ? '\nALL TESTS PASSED' : `\n${failures} FAILURES`);
+console.log(failures === 0
+  ? `\nALL TESTS PASSED${skips > 0 ? ` (${skips} skipped: symlinks/mkfifo unavailable here)` : ''}`
+  : `\n${failures} FAILURES`);
 process.exit(failures === 0 ? 0 : 1);

@@ -2,7 +2,7 @@
 
 **DSH File Explorer** — árvore de arquivos do workspace + editor Monaco com gramáticas TextMate reais do VS Code, dentro da GUI web do DeepSeek Harness.
 
-![versão](https://img.shields.io/badge/versão-0.2.0-blue) ![licença](https://img.shields.io/badge/licença-MIT-green) [![site](https://img.shields.io/badge/site-GitHub%20Pages-38bdf8)](https://dgadelha1.github.io/dsh-explorer-plugin/)
+![versão](https://img.shields.io/badge/versão-0.2.1-blue) ![licença](https://img.shields.io/badge/licença-MIT-green) [![site](https://img.shields.io/badge/site-GitHub%20Pages-38bdf8)](https://dgadelha1.github.io/dsh-explorer-plugin/)
 
 - **Autor:** [dgadelha1](https://github.com/dgadelha1)
 - **Repositório:** https://github.com/dgadelha1/dsh-explorer-plugin
@@ -40,9 +40,9 @@ Detalhes completos na [especificação (SPEC.md)](SPEC.md).
 
 | Requisito | Versão | Observação |
 |---|---|---|
-| DeepSeek Harness | 0.1.0-rc.7 (testado) | CLI `dsh` disponível no PATH |
-| pnpm | ≥ 8 (testado com 9.15.9) | Necessário no PATH para o comando `dsh plugin` |
-| Node.js | ≥ 20 | Usado pela parte servidora (`fs.watch` recursivo) |
+| DeepSeek Harness | 0.2.0-rc.2 (validado) | CLI `dsh` (no app Desktop: `resources\runtime\cli\bin\dsh.cmd`) |
+| pnpm | ≥ 8 (testado com 9.15.9 e 11.7.0) | Necessário para o comando `dsh plugin` |
+| Node.js | ≥ 20 (testado com 24.x) | Usado pela parte servidora (`fs.watch` recursivo) |
 
 > ⚠️ **Neste workspace**, o pnpm não está no PATH do sistema. Use o shim local (`.bin/pnpm`) prefixando o PATH nos comandos abaixo:
 > ```bash
@@ -54,7 +54,7 @@ Detalhes completos na [especificação (SPEC.md)](SPEC.md).
 
 ## Instalação (passo a passo verificado)
 
-> As instruções abaixo foram **testadas de ponta a ponta** contra o DSH 0.1.0-rc.7 + pnpm 9.15.9. O comando `dsh plugin` encaminha os argumentos para o pnpm rodando dentro do diretório do profile (`$DSH_HOME/profiles/<nome>`), instala o pacote e **reconcilia automaticamente** a lista `dsh.profile.bundles` do profile.
+> As instruções abaixo foram **validadas de ponta a ponta** contra o DSH 0.2.0-rc.2 + pnpm 11.7.0 (runtime do app Desktop). O comando `dsh plugin` encaminha os argumentos para o pnpm rodando dentro do diretório do profile (`$DSH_HOME/profiles/<nome>`), instala o pacote e **reconcilia automaticamente** a lista `dsh.profile.bundles` do profile.
 
 ### Instalação rápida (scripts prontos)
 
@@ -68,7 +68,9 @@ Os scripts abaixo automatizam os Passos 1–2 desta seção e imprimem o Passo 3
 
 Profile configurável via `DSH_PROFILE` (padrão `web`). Detalhes, variáveis de ambiente e solução de problemas no [INSTALL.md](INSTALL.md).
 
-> ⚠️ **Windows:** o `dsh` (shim npm) precisa ser invocado com `call` dentro de um `.bat` — os scripts já fazem isso. A validação foi feita de ponta a ponta: instalação real, reconciliação dos bundles e remoção (DSH 0.1.1-rc.2 + pnpm 9.15.9 via `.pnpm-home/`).
+> ⚠️ **Windows:** o `dsh` (shim npm) precisa ser invocado com `call` dentro de um `.bat` — os scripts já fazem isso. A validação foi feita de ponta a ponta: instalação real, reconciliação dos bundles e remoção (DSH 0.2.0-rc.2 + pnpm 11.7.0, runtime do app Desktop).
+>
+> ℹ️ **Profile `desktop` (o usado pelo app Desktop/Electron):** é gerenciado pelo próprio app. O `dsh plugin --profile desktop add -w <caminho>` funciona (instala e reconcilia `dsh.profile.bundles`), mas o servidor **não** pode ser iniciado por linha de comando nesse profile (`profile "desktop" is managed exclusively by the Electron application`): para carregar o plugin **reinicie o app**. O profile `web` continua reiniciável via `dsh web`.
 
 ### Passo 1 — (Opcional) Garantir os assets do runtime
 
@@ -263,7 +265,7 @@ git push -u origin main --tags
 
 - **Atualizações:** basta dar push em `main` — o GitHub Pages republica automaticamente.
 - **Screenshot:** referenciado por caminho relativo (`./screenshot-0.20.png`); para trocar, substitua o PNG em `docs/` (o frame da página se ajusta sozinho ao tamanho da imagem).
-- **Versão:** mantenha o badge `v0.2.0` (header e rodapé do `docs/index.html`) em sincronia com o `package.json`.
+- **Versão:** mantenha o badge `v0.2.1` (header e rodapé do `docs/index.html`) em sincronia com o `package.json`.
 - **Verificação local:** `node scripts/render-check.cjs` abre a página no Firefox headless e valida carregamento, imagem e encaixe do frame (requer `puppeteer-core` + Firefox).
 
 ---

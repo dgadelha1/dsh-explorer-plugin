@@ -17,8 +17,8 @@ Os três compartilham a mesma interface e a mesma lógica: **validam os pré-req
 | Pré-requisito | Versão | Observação |
 |---|---|---|
 | Node.js | ≥ 20 | Usado pela parte servidora (`fs.watch` recursivo) e para rodar o pnpm |
-| CLI `dsh` | ≥ 0.1.0-rc.7 | Instalado via `npm install -g @deepseek-ai/dsh`; precisa estar no PATH |
-| pnpm | ≥ 8 | No PATH **ou** cópia local em `.pnpm-home/` (ver abaixo) |
+| CLI `dsh` | ≥ 0.1.0-rc.7 (validado em 0.2.0-rc.2) | Instalado via `npm install -g @deepseek-ai/dsh`; no app Desktop fica em `resources\runtime\cli\bin\dsh.cmd` |
+| pnpm | ≥ 8 (validado em 11.7.0, o do runtime do app) | No PATH **ou** cópia local em `.pnpm-home/` (ver abaixo) |
 
 **Resolução do pnpm (automática, nesta ordem):**
 
@@ -121,6 +121,8 @@ scripts\install.bat
    - A flag **`-w`** é obrigatória com pnpm ≥ 9 (evita `ERR_PNPM_ADDING_TO_ROOT`);
    - O CLI inicializa o profile no primeiro uso e **reconcilia automaticamente** a lista `dsh.profile.bundles` (o plugin entra na pilha de camadas do boot).
 3. **Próximo passo**: o script imprime a instrução de reiniciar o `dsh web` — a composição dos bundles acontece no **boot**, então reiniciar é obrigatório para o painel aparecer. O script **não** reinicia o servidor sozinho, para não derrubar uma GUI em uso.
+
+> ℹ️ **Profile `desktop` (app Desktop/Electron):** a instalação funciona igual (`dsh plugin --profile desktop add -w <caminho>`), mas o boot desse profile é exclusivo do app — a CLI recusa servir (`profile "desktop" is managed exclusively by the Electron application`). Nesse caso o plugin é carregado **reiniciando o app**, não por `dsh web`.
 
 Verificação rápida após instalar (o profile `web` deve ficar assim):
 

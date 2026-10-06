@@ -27,13 +27,7 @@ window.__ModuleLoader__.load({
 		function h(tag, props, ...children) { return React.createElement(tag, props, ...children); }
 		function cx() { var out = []; for (var i = 0; i < arguments.length; i++) if (arguments[i]) out.push(arguments[i]); return out.join(" "); }
 		function baseName(p) { var i = p.lastIndexOf("/"); return i < 0 ? p : p.slice(i + 1); }
-		function formatSize(bytes) {
-			if (bytes < 1024) return bytes + " B";
-			if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
-			return (bytes / (1024 * 1024)).toFixed(1) + " MB";
-		}
 		function dirName(p) { var i = p.lastIndexOf("/"); return i <= 0 ? "." : p.slice(0, i); }
-		function debounce(fn, ms) { var t = null; return function () { var a = arguments, s = this; clearTimeout(t); t = setTimeout(function () { fn.apply(s, a); }, ms); }; }
 		function fmtBytes(n) {
 			if (n < 1024) return n + " B";
 			if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
@@ -137,15 +131,15 @@ window.__ModuleLoader__.load({
 			"doc": "var(--dsw-alias-state-warn-primary)",
 			"documentation": "var(--dsw-alias-state-warn-primary)",
 			"bin": "var(--dsw-alias-label-tertiary)",               // gray
-			"data": "var(--dsw-alias-state-info-primary)",          // cyan
-			"scripts": "var(--dsw-alias-state-business-secondary)", // lighter blue
-			"script": "var(--dsw-alias-state-business-secondary)",
-			"tools": "var(--dsw-alias-state-business-secondary)",
-			"tool": "var(--dsw-alias-state-business-secondary)",
-			"assets": "var(--dsw-alias-state-pink-primary)",        // pink (custom, fallback to warn)
-			"asset": "var(--dsw-alias-state-pink-primary)",
-			"scenes": "var(--dsw-alias-state-purple-primary)",      // purple (custom, fallback)
-			"scene": "var(--dsw-alias-state-purple-primary)",
+			"data": "var(--dsw-alias-state-idle-primary)",          // neutral accent
+			"scripts": "var(--dsw-alias-state-business-tertiary)",  // softer blue
+			"script": "var(--dsw-alias-state-business-tertiary)",
+			"tools": "var(--dsw-alias-state-business-tertiary)",
+			"tool": "var(--dsw-alias-state-business-tertiary)",
+			"assets": "var(--dsw-alias-state-error-secondary)",     // warm accent
+			"asset": "var(--dsw-alias-state-error-secondary)",
+			"scenes": "var(--dsw-alias-state-success-secondary)",   // soft green
+			"scene": "var(--dsw-alias-state-success-secondary)",
 			"test": "var(--dsw-alias-state-error-primary)",         // red
 			"tests": "var(--dsw-alias-state-error-primary)",
 			"spec": "var(--dsw-alias-state-error-secondary)",
@@ -158,11 +152,11 @@ window.__ModuleLoader__.load({
 			"vendor": "var(--dsw-alias-label-tertiary)",
 			"node_modules": "var(--dsw-alias-label-caption)",       // very light gray
 			".git": "var(--dsw-alias-label-caption)",
-			"public": "var(--dsw-alias-state-info-secondary)",
-			"static": "var(--dsw-alias-state-info-secondary)",
-			"images": "var(--dsw-alias-state-pink-primary)",
-			"img": "var(--dsw-alias-state-pink-primary)",
-			"media": "var(--dsw-alias-state-pink-primary)",
+			"public": "var(--dsw-alias-state-success-tertiary)",    // muted green
+			"static": "var(--dsw-alias-state-success-tertiary)",
+			"images": "var(--dsw-alias-state-error-secondary)",
+			"img": "var(--dsw-alias-state-error-secondary)",
+			"media": "var(--dsw-alias-state-error-secondary)",
 			"components": "var(--dsw-alias-state-business-primary)",
 			"component": "var(--dsw-alias-state-business-primary)",
 			"pages": "var(--dsw-alias-state-business-primary)",
@@ -170,13 +164,13 @@ window.__ModuleLoader__.load({
 			"api": "var(--dsw-alias-state-success-secondary)",
 			"server": "var(--dsw-alias-state-success-secondary)",
 			"client": "var(--dsw-alias-state-business-primary)",
-			"packages": "var(--dsw-alias-state-business-secondary)",
-			"pkg": "var(--dsw-alias-state-business-secondary)",
-			"examples": "var(--dsw-alias-state-info-primary)",
-			"example": "var(--dsw-alias-state-info-primary)",
-			"samples": "var(--dsw-alias-state-info-primary)",
-			"demo": "var(--dsw-alias-state-info-primary)",
-			"demos": "var(--dsw-alias-state-info-primary)",
+			"packages": "var(--dsw-alias-state-business-tertiary)",
+			"pkg": "var(--dsw-alias-state-business-tertiary)",
+			"examples": "var(--dsw-alias-state-idle-primary)",
+			"example": "var(--dsw-alias-state-idle-primary)",
+			"samples": "var(--dsw-alias-state-idle-primary)",
+			"demo": "var(--dsw-alias-state-idle-primary)",
+			"demos": "var(--dsw-alias-state-idle-primary)",
 		};
 
 		function folderIcon(open, name) {
@@ -189,7 +183,7 @@ window.__ModuleLoader__.load({
 		var CSS = `
 @font-face{font-family:"codicon";font-display:block;src:url("/explorer-assets/codicon/codicon.ttf") format("truetype")}
 @font-face{font-family:"seti";font-display:block;src:url("/explorer-assets/seti/seti.woff") format("woff")}
-.dx-overlay{position:absolute;top:0;bottom:0;z-index:2147483000;pointer-events:none}
+.dx-overlay{position:absolute;top:var(--dsh-frame-overlay-top,0px);bottom:0;z-index:2147483000;pointer-events:none}
 .dx-overlay.dx-left{left:0}
 .dx-overlay.dx-right{right:0}
 /* Every color below comes from the DSH design-system theme (--dsw-* tokens):
@@ -310,14 +304,29 @@ window.__ModuleLoader__.load({
 .dx-spin{display:inline-block;animation:dxspin 1s linear infinite}
 @keyframes dxspin{to{transform:rotate(360deg)}}
 `;
-		(function injectCss() {
-			if (typeof document === "undefined") return;
-			if (document.querySelector('style[data-plugin="dsh-explorer-plugin"]')) return;
-			var s = document.createElement("style");
-			s.setAttribute("data-plugin", "dsh-explorer-plugin");
-			s.textContent = CSS;
-			document.head.appendChild(s);
-		})();
+		// Idempotent, disposable CSS: `apply` claims the <style> through ctx.effect,
+		// so unloading the plugin removes it instead of leaving dead rules behind.
+		// Ownership is tracked in a WeakSet rather than re-queried from the DOM: on
+		// a repeated claim the element exists because WE created it, so the caller
+		// must still receive a working disposer (returning a no-op would leak it).
+		var claimedStyles = new WeakSet();
+		function claimStyles() {
+			if (typeof document === "undefined") return function () {};
+			var found = document.querySelector('style[data-plugin="dsh-explorer-plugin"]');
+			var style = found;
+			if (!style) {
+				style = document.createElement("style");
+				style.setAttribute("data-plugin", "dsh-explorer-plugin");
+				style.textContent = CSS;
+				document.head.appendChild(style);
+			}
+			claimedStyles.add(style);
+			return function () {
+				if (!claimedStyles.has(style)) return;
+				claimedStyles.delete(style);
+				if (style.parentNode) style.parentNode.removeChild(style);
+			};
+		}
 
 		// ───────────────────────── locale ─────────────────────────
 		var NS = "explorer";
@@ -965,7 +974,7 @@ window.__ModuleLoader__.load({
 				case "PANEL_SIDE": return { ...state, side: action.side };
 				case "PANEL_WIDTH": return { ...state, width: action.width };
 				case "SPLIT_PCT": return { ...state, splitPct: action.pct };
-				case "PANEL_OFFSET": return { ...state, panelOffset: action.offset };
+				case "PANEL_OFFSET": return state.panelOffset === action.offset ? state : { ...state, panelOffset: action.offset };
 				case "NOTICE": return { ...state, notice: action.notice };
 				case "CLEAR_NOTICE": return { ...state, notice: null };
 				case "CONFIRM": return { ...state, confirm: action.confirm };
@@ -977,14 +986,21 @@ window.__ModuleLoader__.load({
 		}
 
 		// ───────────────────────── root derivation ─────────────────────────
+		// The canonical root is the live session's cwd. Not every session carries
+		// one (a session may open before its workspace/cwd is known), so a session
+		// without `cwd` must NOT mask the workspace fallback — otherwise the panel
+		// shows "no workspace" while a recent workspace is actually open.
 		function deriveRoot(sessionsSnap, workspacesSnap) {
 			var cur = sessionsSnap && sessionsSnap.current;
 			var s = cur && sessionsSnap.byId && sessionsSnap.byId[cur];
 			if (s && s.cwd) return s.cwd;
 			if (workspacesSnap) {
 				var recent = workspacesSnap.recentWorkspaceId;
-				var ws = recent && workspacesSnap.items && workspacesSnap.items.find(function (w) { return w.workspaceId === recent; });
+				var items = workspacesSnap.items || [];
+				var ws = recent && items.find(function (w) { return w.workspaceId === recent; });
 				if (ws && ws.path) return ws.path;
+				var first = items.find(function (w) { return w && w.path; });
+				if (first) return first.path;
 			}
 			return null;
 		}
@@ -992,12 +1008,37 @@ window.__ModuleLoader__.load({
 		// ───────────────────────── main component ─────────────────────────
 		var appCtx = null;
 
+		// Translation seat. A slot entry that declares `locale` normally receives
+		// the framework-injected `t` prop, but that seat is not part of the
+		// `shell.overlay` standard props, so we must not crash without it: fall
+		// back to the documented `ctx.locale.bind(ns)` and, as a last resort, to
+		// our own dictionary so the panel always renders readable copy.
+		function dictT(key, vars) {
+			// `en` first (second shipped dictionary), `pt` as the author fallback.
+			var table = dict.en || {};
+			var tablePt = dict.pt || {};
+			var s = table[key] != null ? table[key] : (tablePt[key] != null ? tablePt[key] : key);
+			if (vars) s = String(s).replace(/\{(\w+)\}/g, function (m, k) { return vars[k] != null ? String(vars[k]) : m; });
+			return s;
+		}
+		function bindT(ctx, props) {
+			if (props && typeof props.t === "function") return props.t;
+			try {
+				if (ctx && ctx.locale && typeof ctx.locale.bind === "function") {
+					var bound = ctx.locale.bind(NS);
+					if (typeof bound === "function") return bound;
+				}
+			} catch (e) { /* locale service unavailable */ }
+			return dictT;
+		}
+
 		function ExplorerPanel(props) {
-			var t = props.t;
 			var ctx = appCtx;
+			var t = bindT(ctx, props);
 			var [state, dispatch] = useReducer(reducer, null, initialState);
 			var refreshTimer = useRef(null);
 			var lastSetGrid = useRef(null);
+			var autoFlippedRef = useRef(false);
 			var [setiTick, setSetiTick] = useState(0);
 
 			var sessionsSnap = useSyncExternalStore(
@@ -1099,6 +1140,15 @@ window.__ModuleLoader__.load({
 			// Dock the panel as a real grid column so it RESIZES the app (chat)
 			// instead of floating over it. We insert our width into the AppFrame's
 			// grid-template-columns and keep it in sync via MutationObserver.
+			//
+			// The AppFrame places its columns by AUTO-PLACEMENT (sidebar → track 1,
+			// chat → track 2, rightbar → track 3): nothing pins them to named
+			// tracks. Merely inserting our own track would therefore shift every
+			// later column into the previous track — the chat landed in our
+			// fixed-width track and the panel covered it completely (the "explorer
+			// over the chat window" breakage). Only the columns AFTER our insertion
+			// point shift, so only those get an inline grid-column pin; the pins
+			// are cleared whenever we are not inserting (and on teardown).
 			useEffect(function () {
 				var overlayEl = document.querySelector("[data-shell-overlay]");
 				var frame = overlayEl && overlayEl.parentElement;
@@ -1117,32 +1167,103 @@ window.__ModuleLoader__.load({
 					if (cur) out.push(cur);
 					return out;
 				}
+				// In-flow columns of the app frame: the element children that
+				// precede the overlay layer and are not absolutely positioned.
+				// Re-scanned on every apply: React may replace a column node at
+				// any time, and a pin set on a detached node is lost with it.
+				function scanCols() {
+					var cols = [];
+					for (var el = frame.firstElementChild; el && el !== overlayEl; el = el.nextElementSibling) {
+						try { if (getComputedStyle(el).position !== "absolute") cols.push(el); } catch (e) { /* keep */ }
+					}
+					return cols;
+				}
+				// Our track is always exactly "<state.width>px" at our insertion
+				// spot (index 1 on the left, the last token on the right); the
+				// app's own tokens never carry that exact user-tuned width there.
+				function stripOwnTrack(tokens, side) {
+					if (tokens.length < 2) return tokens;
+					var i = side === "left" ? 1 : tokens.length - 1;
+					if (i > 0 && tokens[i] === state.width + "px") {
+						return tokens.slice(0, i).concat(tokens.slice(i + 1));
+					}
+					return tokens;
+				}
+				// Pin only the columns our insertion displaces (those after the
+				// inserted track); everything before it keeps natural placement.
+				// React does not manage grid-column on these elements, so inline
+				// pins survive re-renders until cleared.
+				function pinColumns(cols, insertedAt) {
+					for (var i = 0; i < cols.length; i++) {
+						var track = insertedAt >= 0 && i >= insertedAt ? String(i + 2) : "";
+						if (cols[i].style.gridColumn !== track) cols[i].style.gridColumn = track;
+					}
+				}
 				function applyGrid() {
+					// The app's own right sidebar claims the frame's right edge when
+					// opened (its track replaces the collapsed marker). Instead of
+					// overlapping it, step aside to the left — once per episode, so
+					// a manual flip back while it is open is respected.
+					if (frame.hasAttribute("data-rightbar-collapsed")) {
+						autoFlippedRef.current = false;
+					} else if (state.panelOpen && state.side === "right" && !autoFlippedRef.current) {
+						autoFlippedRef.current = true;
+						dispatch({ type: "PANEL_SIDE", side: "left" });
+						return;
+					}
 					var raw = frame.style.gridTemplateColumns || "";
-					if (raw === lastSetGrid.current) return;
 					var t = splitTokens(raw);
-					if (t.length === 0) return; // app has not laid out the grid yet; observer will re-apply
-					if (t.length > 3) {
-						// our inserted column is present; strip it (left inserts at idx 1, right appends)
-						t = state.side === "left" ? t.filter(function (_, i) { return i !== 1; }) : t.slice(0, t.length - 1);
+					var cols = scanCols();
+					// Unknown frame structure: do not guess. A grid we cannot
+					// decode must stay untouched (the panel floats at the edge
+					// instead of the chat being shifted into the wrong track), and
+					// a track inserted before the structure changed is undone.
+					if (t.length < 2 || cols.length < 2) {
+						pinColumns(cols, -1);
+						var stripped = stripOwnTrack(t, state.side);
+						if (stripped.length !== t.length) {
+							var restored = stripped.join(" ");
+							lastSetGrid.current = restored;
+							frame.style.gridTemplateColumns = restored;
+						}
+						appBase = null;
+						return;
 					}
+					t = stripOwnTrack(t, state.side);
 					appBase = t.join(" ");
-					var sidebarW = parseFloat(t[0]) || 0;
+					var insertedAt = -1;
 					if (state.panelOpen) {
-						if (state.side === "left") t.splice(1, 0, state.width + "px");
-						else t.push(state.width + "px");
+						if (state.side === "left") { t.splice(1, 0, state.width + "px"); insertedAt = 1; }
+						else { t.push(state.width + "px"); insertedAt = t.length - 1; }
 					}
+					pinColumns(cols, insertedAt);
 					var next = t.join(" ");
+					if (next === lastSetGrid.current) return; // our own write echoed back
 					lastSetGrid.current = next;
 					frame.style.gridTemplateColumns = next;
-					dispatch({ type: "PANEL_OFFSET", offset: sidebarW });
+					if (state.panelOpen) dispatch({ type: "PANEL_OFFSET", offset: parseFloat(t[0]) || 0 });
 				}
 				applyGrid();
 				observer = new MutationObserver(applyGrid);
-				observer.observe(frame, { attributes: true, attributeFilter: ["style"] });
+				// childList too: a React node replacement keeps the style attribute
+				// intact but orphans our pins — re-scan and re-pin when it happens.
+				observer.observe(frame, { attributes: true, attributeFilter: ["style"], childList: true });
+				// The app parks its right-sidebar pane off-canvas past the frame's
+				// right edge, which leaves the overflow:hidden frame with scrollable
+				// overflow; a stray programmatic scroll (focus, wheel, tooling) then
+				// shifts the whole shell, our alignment included. The frame is a
+				// fixed shell that never scrolls by design — keep it at zero.
+				function pinScroll() { if (frame.scrollLeft !== 0) frame.scrollLeft = 0; }
+				frame.addEventListener("scroll", pinScroll, { passive: true });
+				pinScroll();
 				return function () {
 					if (observer) observer.disconnect();
-					if (appBase !== null && frame.style.gridTemplateColumns === lastSetGrid.current) {
+					frame.removeEventListener("scroll", pinScroll);
+					pinColumns(scanCols(), -1);
+					var cur = frame.style.gridTemplateColumns || "";
+					// Restore the app's template only if the current value is ours
+					// — never clobber a fresher value the app wrote after our sync.
+					if (appBase !== null && cur !== appBase && stripOwnTrack(splitTokens(cur), state.side).join(" ") === appBase) {
 						frame.style.gridTemplateColumns = appBase;
 					}
 					lastSetGrid.current = null;
@@ -1355,7 +1476,7 @@ window.__ModuleLoader__.load({
 								return;
 							}
 							if (source.tooLarge) {
-								dispatch({ type: "NOTICE", notice: { kind: "error", text: t("editor.tooLarge", { size: formatSize(source.size) }) } });
+								dispatch({ type: "NOTICE", notice: { kind: "error", text: t("editor.tooLarge", { size: fmtBytes(source.size) }) } });
 								return;
 							}
 							if (!source.content) {
@@ -1688,7 +1809,7 @@ window.__ModuleLoader__.load({
 				h("div", { className: "dx-status" },
 					h("span", { className: "dx-status-path", title: tab.path, children: [
 						tab.name || baseName(tab.path),
-						tab.content != null ? h("span", { style: { opacity: .6, marginLeft: 6 }, children: "(" + tab.content.split("\n").length + " lines · " + formatSize(new TextEncoder().encode(tab.content).length) + ")" }) : null,
+						tab.content != null ? h("span", { style: { opacity: .6, marginLeft: 6 }, children: "(" + tab.content.split("\n").length + " lines · " + fmtBytes(new TextEncoder().encode(tab.content).length) + ")" }) : null,
 					] }),
 					tab.readOnly ? h("span", { className: "dx-tag", children: t("editor.readOnly") }) : null,
 					tab.dirty ? h("span", { className: "dx-tag dx-warn", children: t("editor.unsaved") }) : null,
@@ -1889,6 +2010,9 @@ window.__ModuleLoader__.load({
 		// ───────────────────────── plugin body ─────────────────────────
 		function apply(ctx) {
 			appCtx = ctx;
+			ctx.effect(function () {
+				return claimStyles();
+			}, "dsh-explorer: styles");
 			ctx.effect(function () {
 				return ctx.locale.register(NS, dict);
 			}, "dsh-explorer: dictionaries");

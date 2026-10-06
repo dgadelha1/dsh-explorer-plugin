@@ -53,7 +53,7 @@ const puppeteer = loadModule('puppeteer-core');
   console.log(JSON.stringify(m, null, 2));
   console.log('=== ERRORS ===');
   console.log(errors.length ? errors.join('\n') : '(none)');
-  const ok = errors.length === 0 && m.imgLoaded && m.frameWidthDelta === 18 && !m.horizontalOverflow && m.versionBadge === 'v0.2.0 · MIT';
+  const ok = errors.length === 0 && m.imgLoaded && m.frameWidthDelta === 18 && !m.horizontalOverflow && m.versionBadge === 'v0.2.1 · MIT';
   console.log(ok ? 'RENDER CHECK PASSED' : 'RENDER CHECK FAILED');
   await browser.close();
   process.exit(ok ? 0 : 1);

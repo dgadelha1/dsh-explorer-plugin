@@ -71,9 +71,10 @@ dsh-explorer-plugin/
     "client": {
       "platform": "web",
       "inject": [
-        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-modules",
         "@deepseek-ai/dsh-client-connection",
         "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-slots",
         "@deepseek-ai/dsh-client-ui-theme",
         "@deepseek-ai/dsh-client-locale"
       ]
@@ -96,7 +97,7 @@ The server plugin exports `{ name: 'explorer', inject: ['webServer', 'connection
 
 ### 3.1 RPC channel `/explorer`
 
-Registered with `ctx.connection.rpc.handle('/explorer', handler, { authority: 'loopback' })`.
+Registered with `ctx.connection.rpc.handle('/explorer', handler)` — on dsh releases where the `connection` service cannot see `webServer` from its own fiber (0.1.5-rc.3, where the documented `handle` throws `cannot get property "webServer" without inject`), the plugin falls back to the service's registry: `connection.register(ctx, '/explorer', handler)`, with the plugin's ctx as owner — the same prefix route, fence, and HTTP/envelope bridge. The former `{ authority: 'loopback' }` no longer exists: the platform fence requires a loopback Host + same-origin **and** the browser session cookie (401 without it).
 > The channel **cannot contain an inner `/`** (`CHANNEL_PATTERN = /^\/[A-Za-z0-9._~-]+$/`) — hence `/explorer` and not `/rpc/explorer`.
 
 Handler `(endpoint, payload, signal) → RpcResult`. The client calls `ctx.connection.rpc.call('/explorer', endpoint, payload)` → `POST /explorer/<endpoint>`.
@@ -117,9 +118,11 @@ Endpoints (all with `{root, …}`; paths always relative to the root):
 
 Rules:
 - **Confinement/sandbox**: `path.resolve(root, …)` + prefix check; existing paths go through `realpath` of the deepest ancestor (blocks symlinks that escape the root). Escaping → `bad-request`. Reads re-confirm the file's `realpath` immediately before I/O (reduced TOCTOU window).
-- **Root validated server-side (not trusted from the client)**: the `root` sent by the client must be the canonical cwd of a live session or a workspace registry path — otherwise `bad-request`/`403`. This prevents reading/writing arbitrary directories (`/`, `/etc`, `~`) through the loopback API. The RPC channel is already CSRF-protected by the platform (`isTrustedApiRequest`: loopback Host + Origin/same-site).
+- **Root validated server-side (not trusted from the client)**: the `root` sent by the client must be the canonical cwd of a live session or a workspace registry path — otherwise `bad-request`/`403`. This prevents reading/writing arbitrary directories (`/`, `/etc`, `~`) through the loopback API. The RPC channel is protected by the platform fence (`isTrustedApiRequest`: loopback Host + same-origin, plus the browser session cookie).
 - `root` validated as an existing directory on every call.
-- Error codes only from the shared RPC schema (`bad-request`, `directory-exists`, `directory-unreadable`, `internal`) — the client schema rejects unknown codes.
+- Error codes only from the shared RPC schema (`bad-request`, `directory-exists`, `directory-unreadable`, `internal`) — the client schema rejects unknown codes. The mutating endpoints' `catch` blocks **rethrow an already-typed `FsError`** instead of re-wrapping everything as `internal`: otherwise a confinement rejection (`bad-request`) would surface as an ordinary I/O failure.
+- **Hidden by default on the server too**: an omitted `includeHidden` is treated as `false` (the client opts in through the header toggle), so the server default and the UI default agree.
+- Static-route MIME is resolved from the **basename extension**, and only when the basename has a dot: `lastIndexOf('.')` over the whole path returns `-1` for an extensionless name and `slice(-1)` would hand the path's last character to the MIME table.
 - Binary detected by a NUL byte within the first 8 KB.
 
 ### 3.2 Web routes (webServer)
@@ -143,13 +146,21 @@ Rules:
 - Bundle in the `window.__ModuleLoader__.load({id:'dsh-explorer-plugin', factory})` format, exporting `apply` + `inject`.
 - `inject` (services): `['slots','layout','connection','sessions','workspaces','locale','theme']`.
 - `apply(ctx)`: registers `explorer` dictionaries (pt/en/zh) and the `ExplorerPanel` component in the `shell.overlay` (list, root) slot of `ui-layout`.
-- Runtime dependencies of the bundle: only `react` (via `require`); everything else via `ctx` services. CSS injected via `<style>` (claimed by `claimStyles`).
-- **Colors 100% from the theme**: all CSS uses DSH design-system tokens (`--dsw-*` — texts, borders, backgrounds, hover, dialogs, shadows) and `color-mix()` for translucent overlays; **no hardcoded hex/rgb**. The status bar uses the accent color (`--dsw-alias-state-business-primary`); folders/unsaved dot use the theme amber (`--dsw-alias-state-warn-*`); errors use `--dsw-alias-state-error-*`. The panel follows light/dark automatically via `body[data-ds-dark-theme]` of the app.
+- **Translated copy without depending on the `t` seat**: the registration declares `locale: 'explorer'` (the same pattern shipped plugins use, e.g. `agent-presets`' `settings.section`), but `shell.overlay`'s standard props do not include `t` — so the component resolves its translator in a cascade: `props.t` → `ctx.locale.bind('explorer')` → the internal dictionary (`en`, then `pt`). A host contract change therefore degrades to readable text instead of crashing the slot entry (which is what happens when a component throws: `slot entry crashed in '<slot>'`).
+- Runtime dependencies of the bundle: only `react` (via `require`); everything else via `ctx` services. CSS is injected as a `<style data-plugin="dsh-explorer-plugin">` claimed by `ctx.effect`, so it is idempotent and disposed on unload (ownership lives in a `WeakSet`, so a repeated claim returns a working disposer instead of leaking the stylesheet).
+- **Colors 100% from the theme**: all CSS uses DSH design-system tokens (`--dsw-*` — texts, borders, backgrounds, hover, dialogs, shadows) and `color-mix()` for translucent overlays; **no hardcoded hex/rgb**. Every token name is validated against the live token set of the installed DSH (`cordis_inspect_query` `Theme`, plus the bundle's own token table); the status bar uses the accent color (`--dsw-alias-state-business-primary`), folders/unsaved dot use the theme amber (`--dsw-alias-state-warn-*`), errors use `--dsw-alias-state-error-*`. The panel follows light/dark automatically via the app's theme attributes.
 - Runtime assets loaded by classic script/fetch from `/explorer-assets` (monaco AMD via `loader.js` + `require.config({paths:{vs}})`; onig/textmate as classic UMD → `window.onig` / `window.vscodetextmate`; onig.wasm via `loadWASM({data})`).
 
 ### 4.2 Panel: docked into the grid (resizes the chat)
 
-- The panel is rendered in the `shell.overlay` of the AppFrame, but **participates in the layout**: an effect reads the AppFrame's inline `grid-template-columns` (located via `[data-shell-overlay]`), **inserts the panel width as a column** (left side → after the DSH sidebar; right side → at the end) and keeps in sync with app changes via `MutationObserver` (self-loop guard via `lastSet`).
+- The panel is rendered in the `shell.overlay` of the AppFrame, but **participates in the layout**: an effect reads the AppFrame's inline `grid-template-columns` (located via `[data-shell-overlay]`), **inserts the panel width as a column** (left side → after the DSH sidebar; right side → at the end) and keeps in sync with app changes via `MutationObserver` (self-loop guard by comparing the resulting template, not the read-back string).
+- **The columns displaced by the insertion are pinned with `grid-column`**: the AppFrame places its columns by **auto-placement** (sidebar → track 1, chat → track 2, rightbar → track 3), so merely inserting a track would shift the chat into the panel's fixed track — the panel would cover it completely (the "explorer over the chat window" bug seen on the Desktop app 0.2.0-rc.2). Only **the columns after the insertion point** get pinned (left: chat→3, rightbar→4; the sidebar keeps natural placement; right: no pins, append at the end). Pins are inline, idempotent and cleared on teardown; React does not manage `grid-column` on those elements, so there is no conflict.
+- **The app columns are re-scanned on every apply** and the observer also watches `childList`: if React replaces a column node while the panel is open, the pin dies with the old node — the re-scan re-pins the new node in the same cycle.
+- **The panel's own track is detected by its exact value** (`state.width + "px"` at the insertion spot: index 1 on the left, the last token on the right) — the app never writes that user-tuned width at those positions, and the detection survives the CSSOM re-serializing what we wrote.
+- **Structure fail-safe**: fewer than 2 in-flow columns or an undecodable template → the grid is **left untouched** (the panel floats at the edge instead of shifting the chat into the wrong track) and any leftover track of ours is undone.
+- **The frame never scrolls**: the app parks its right-sidebar pane off-canvas past the frame's right edge, which leaves the `overflow:hidden` frame with scrollable overflow — a stray programmatic scroll (focus, wheel, tooling) used to shift the whole shell, our alignment included (seen live: `scrollLeft=256`). The effect zeroes `frame.scrollLeft` on mount and in a `scroll` listener.
+- **Coexistence with the app's right sidebar**: when the app opens its own right sidebar (`data-rightbar-collapsed` absent), the panel **steps aside to the left automatically** — once per open episode (a manual flip back while it is open is respected). Known degradation, absent app cooperation: with the app's right sidebar open, the chat drops to the app's minimum (400px) and the app sidebar may get partially clipped — fixing that needs an upstream contract (a negotiable column slot).
+- The panel honors `--dsh-frame-overlay-top` (the app's contract for overlay content under the Desktop titlebar; web fallback `0px`).
 - The panel is `position:absolute` inside the frame, aligned to the inserted column. Result: opening the panel **shrinks the chat** (with the app grid transition).
 - **Collapsible** (state persisted in `localStorage` `dsh-explorer.prefs`); minimized becomes a **thin pill at the screen edge, mid-height** (doesn't overlap the session log / status bar).
 - **Resizable**: grip on the panel edge (1:1 drag, grid transition disabled while dragging, 260–560 px) + **vertical tree/editor divider** (20–70%, persisted).
@@ -196,6 +207,8 @@ Rules:
 4. **Restart `dsh web`** (client-plugin scanning and loader composition happen at boot). Changes to the **client only** (`lib/client.js`, `vendor/`) are served live with `no-cache` — just refresh the page.
 
 ## 6. Acceptance criteria (verified)
+
+> Automated verification: `npm test` = `scripts/server-test.mjs` (72 assertions: confinement/allowlist, caps, static-route MIME, listing defaults, watcher, and the HTTP trust fence — Host/Origin/Sec-Fetch-Site on both routes) + `scripts/smoke-client.cjs` (23 assertions: loader contract, `apply` claims, disposable CSS, first render with and without a locale seat, and the docking regression — inserted track, minimal pins for the displaced columns, re-sync after the app rewrites its grid, re-pin of a React-replaced node, teardown restoring the grid, unknown-structure fail-safe and stray-frame-scroll zeroing). On Windows the symlink cases use a **junction** (`mklink /J`), so the escape coverage runs without privilege; only FIFO is left out.
 
 - [x] Panel opens/closes, moves left/right, resizes (edge + divider); state persists.
 - [x] Opening the panel **resizes the chat** (grid column).
